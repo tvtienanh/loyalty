@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<title>Tra cứu Loyalty – So sánh CT 2026</title>
+
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        padding: 20px;
+        background: #fafafa;
+    }
+    h2 {
+        margin-bottom: 10px;
+    }
+    input {
+        width: 420px;
+        padding: 8px;
+        font-size: 14px;
+    }
+    table {
+        border-collapse: collapse;
+        width: 100%;
+        margin-top: 15px;
+        background: #fff;
+    }
+    th, td {
+        border: 1px solid #ccc;
+        padding: 6px;
+        font-size: 13px;
+        vertical-align: top;
+    }
+    th {
+        background: #f2f2f2;
+        position: sticky;
+        top: 0;
+    }
+    tr.ok {
+        background: #e9ffe9;
+    }
+    tr.missing {
+        background: #ffe9e9;
+    }
+</style>
+</head>
+
+<body>
+
+<h2>Tra cứu khách hàng Loyalty – Kiểm tra CT 2026</h2>
+
+<input
+  id="searchInput"
+  placeholder="Nhập Mã KH / Tên KH / SĐT / TDV"
+/>
+
+<table>
+<thead>
+<tr>
+    <th>Mã KH</th>
+    <th>Khách hàng</th>
+    <th>Tỉnh</th>
+    <th>SĐT</th>
+    <th>TDV</th>
+    <th>Team ký 2025</th>
+    <th>Team ký 2026</th>
+    <th>Đăng ký thành công</th>
+    <th>Ghi chú</th>
+    <th>Trạng thái CT 2026</th>
+</tr>
+</thead>
+<tbody id="tbody"></tbody>
+</table>
+
+<script>
+const NEW_URL =
+"https://docs.google.com/spreadsheets/d/14dZ70xuUlYskJHGLfF4dI_lY_V8vsqJfAJ-Dlo_DdrU/gviz/tq?tqx=out:json&sheet=new_data";
+
+const OLD_URL =
+"https://docs.google.com/spreadsheets/d/14dZ70xuUlYskJHGLfF4dI_lY_V8vsqJfAJ-Dlo_DdrU/gviz/tq?tqx=out:json&sheet=original_data";
+
+let newData = [];
+let originalMap = {};
+
+/* ===== CORE FUNCTIONS ===== */
+
+function parseGViz(text) {
+    return JSON.parse(text.substring(47, text.length - 2));
+}
+
+function rowToObject(cols, row) {
+    const obj = {};
+    cols.forEach((c, i) => {
+        obj[c.label] = row.c[i] ? row.c[i].v : "";
+    });
+    return obj;
+}
+
+/* ===== LOAD DATA ===== */
+
+Promise.all([
+    fetch(NEW_URL).then(r => r.text()),
+    fetch(OLD_URL).then(r => r.text())
+]).then(([newText, oldText]) => {
+
+    const newJson = parseGViz(newText);
+    const oldJson = parseGViz(oldText);
+
+    newData = newJson.table.rows.map(r =>
+        rowToObject(newJson.table.cols, r)
+    );
+
+    oldJson.table.rows.forEach(r => {
+        const obj = rowToObject(oldJson.table.cols, r);
+        if (obj["MÃ KH"]) {
+            originalMap[obj["MÃ KH"]] = true;
+        }
+    });
+});
+
+/* ===== RENDER ===== */
+
+function render(keyword = "") {
+    const tbody = document.getElementById("tbody");
+    tbody.innerHTML = "";
+
+    const kw = keyword.toLowerCase();
+
+    newData
+      .filter(d =>
+        Object.values(d).join(" ").toLowerCase().includes(kw)
+      )
+      .forEach(d => {
+
+        const existed = originalMap[d["MÃ KH"]];
+        const note = `${d["NOTE HÌNH ẢNH"] || ""} ${d["THÔNG TIN SAI"] || ""}`;
+
+        tbody.innerHTML += `
+        <tr class="${existed ? "ok" : "missing"}">
+            <td>${d["MÃ KH"] || ""}</td>
+            <td>${d["KH"] || ""}</td>
+            <td>${d["TỈNH"] || ""}</td>
+            <td>${d["SĐT"] || ""}</td>
+            <td>${d["TDV"] || ""}</td>
+            <td>${d["TEAM ĐÃ KÝ 2025"] || ""}</td>
+            <td>${d["TEAM ĐÃ KÝ 2026"] || ""}</td>
+            <td>${d["ĐĂNG KÝ THÀNH CÔNG"] || ""}</td>
+            <td>${note}</td>
+            <td>${existed ? "✅ Đã tham gia" : "❌ Chưa tham gia"}</td>
+        </tr>`;
+      });
+}
+
+/* ===== SEARCH EVENT ===== */
+
+document.getElementById("searchInput")
+  .addEventListener("input", e => render(e.target.value));
+</script>
+
+</body>
+</html>
