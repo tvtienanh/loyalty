@@ -215,8 +215,13 @@ async function loadData() {
         const newJson = parseGViz(newText);
         const oldJson = parseGViz(oldText);
 
+        console.log("=== DEBUG INFO ===");
         console.log("New data rows:", newJson.table.rows.length);
         console.log("Old data rows:", oldJson.table.rows.length);
+        console.log("New data columns:", newJson.table.cols.map(c => c.label));
+        console.log("Old data columns:", oldJson.table.cols.map(c => c.label));
+        console.log("Sample new row:", newJson.table.rows[0]);
+        console.log("Sample old row:", oldJson.table.rows[0]);
 
         // Process new_data
         const newDataArray = [];
