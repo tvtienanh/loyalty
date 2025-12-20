@@ -33,6 +33,34 @@
         margin-bottom: 20px;
     }
     
+    .filter-box {
+        margin-bottom: 20px;
+        display: flex;
+        gap: 15px;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+    
+    .filter-box label {
+        font-weight: 600;
+        color: #555;
+    }
+    
+    .filter-box select {
+        padding: 8px 12px;
+        border: 2px solid #ddd;
+        border-radius: 6px;
+        font-size: 14px;
+        background: white;
+        cursor: pointer;
+        transition: border-color 0.3s;
+    }
+    
+    .filter-box select:focus {
+        outline: none;
+        border-color: #4CAF50;
+    }
+    
     input { 
         width: 100%;
         max-width: 500px;
@@ -135,6 +163,15 @@
         >
     </div>
     
+    <div class="filter-box">
+        <label for="statusFilter">Lọc trạng thái:</label>
+        <select id="statusFilter">
+            <option value="all">Tất cả</option>
+            <option value="success">✅ Đã tham gia</option>
+            <option value="missing">❌ Chưa tham gia</option>
+        </select>
+    </div>
+    
     <div id="stats" class="stats" style="display:none;"></div>
     
     <div class="table-wrapper">
@@ -169,7 +206,6 @@ const OLD_URL = "https://docs.google.com/spreadsheets/d/14dZ70xuUlYskJHGLfF4dI_l
 const MAX_RENDER = 10000;
 
 let allData = [];
-let newDataMap = {}; // Map để check Mã KH có trong new_data không
 let debounceTimer;
 let isLoading = true;
 
@@ -191,11 +227,7 @@ function rowToObject(cols, row) {
         let value = "";
         
         if (cellValue !== null && cellValue !== undefined) {
-            // SỬA ĐỔI: Kiểm tra .f (formatted) trước. 
-            // Nếu là dạng text trong cột số, .v sẽ null nhưng .f sẽ có dữ liệu.
-            if (cellValue.f !== null && cellValue.f !== undefined) {
-                value = cellValue.f;
-            } else if (cellValue.v !== null && cellValue.v !== undefined) {
+            if (cellValue.v !== null && cellValue.v !== undefined) {
                 value = cellValue.v;
             }
         }
@@ -203,6 +235,16 @@ function rowToObject(cols, row) {
         obj[col.label] = value;
     });
     return obj;
+}
+
+/* ===== CREATE UNIQUE KEY ===== */
+function createUniqueKey(maKH, tenKH, sdt) {
+    // Tạo unique key từ MÃ KH + Tên KH + SĐT để loại bỏ trùng lặp
+    const normalizedMaKH = normalizeValue(maKH).toLowerCase();
+    const normalizedTenKH = normalizeValue(tenKH).toLowerCase();
+    const normalizedSDT = normalizeValue(sdt).replace(/\D/g, ''); // Chỉ giữ số
+    
+    return `${normalizedMaKH}|${normalizedTenKH}|${normalizedSDT}`;
 }
 
 /* ===== LOAD DATA ===== */
@@ -222,13 +264,11 @@ async function loadData() {
         console.log("=== DEBUG INFO ===");
         console.log("New data rows:", newJson.table.rows.length);
         console.log("Old data rows:", oldJson.table.rows.length);
-        console.log("New data columns:", newJson.table.cols.map(c => c.label));
-        console.log("Old data columns:", oldJson.table.cols.map(c => c.label));
-        console.log("Sample new row:", newJson.table.rows[0]);
-        console.log("Sample old row:", oldJson.table.rows[0]);
 
-        // Process new_data
-        const newDataArray = [];
+        // Map để loại bỏ trùng lặp
+        const dataMap = new Map();
+        
+        // Process new_data TRƯỚC (ưu tiên new_data)
         newJson.table.rows.forEach(row => {
             const obj = rowToObject(newJson.table.cols, row);
             
@@ -240,16 +280,16 @@ async function loadData() {
             obj._search = [maKH, kh, sdt, tdv].join(" ").toLowerCase();
             obj._isNew = true;
             
-            newDataArray.push(obj);
+            // Tạo unique key để check trùng
+            const uniqueKey = createUniqueKey(maKH, kh, sdt);
             
-            // Lưu vào map với key là Mã KH
-            if (maKH) {
-                newDataMap[maKH] = obj;
-            }
+            // Lưu vào map (new_data được ưu tiên)
+            dataMap.set(uniqueKey, obj);
         });
 
-        // Process original_data - KHÔNG BỎ QUA bất kỳ record nào
-        const oldDataArray = [];
+        const newDataCount = dataMap.size;
+
+        // Process original_data SAU
         oldJson.table.rows.forEach(row => {
             const obj = rowToObject(oldJson.table.cols, row);
             
@@ -261,19 +301,23 @@ async function loadData() {
             obj._search = [maKH, kh, sdt, tdv].join(" ").toLowerCase();
             obj._isNew = false;
             
-            oldDataArray.push(obj);
+            const uniqueKey = createUniqueKey(maKH, kh, sdt);
+            
+            // Chỉ thêm nếu CHƯA tồn tại trong map (tránh trùng với new_data)
+            if (!dataMap.has(uniqueKey)) {
+                dataMap.set(uniqueKey, obj);
+            }
         });
 
-        // Merge: Tất cả new_data + tất cả original_data (không merge theo Mã KH)
-        // Giữ nguyên cả 2 bộ data để có đủ 11k records
-        allData = [...newDataArray, ...oldDataArray];
+        // Chuyển Map thành Array
+        allData = Array.from(dataMap.values());
 
-        console.log("Total data loaded:", allData.length);
-        console.log("New data count:", newDataArray.length);
-        console.log("Old data count:", oldDataArray.length);
+        console.log("Total unique data:", allData.length);
+        console.log("New data count:", newDataCount);
+        console.log("Old data count (unique):", allData.length - newDataCount);
 
         isLoading = false;
-        showMessage(`✅ Đã tải ${allData.length} records (${newDataArray.length} từ new_data + ${oldDataArray.length} từ original_data). Hãy nhập từ khóa để tìm kiếm.`);
+        showMessage(`✅ Đã tải ${allData.length} khách hàng duy nhất (${newDataCount} từ new_data + ${allData.length - newDataCount} từ original_data). Hãy nhập từ khóa để tìm kiếm.`);
         
     } catch (error) {
         isLoading = false;
@@ -285,15 +329,15 @@ async function loadData() {
 /* ===== CHECK IF CUSTOMER SUCCESSFULLY REGISTERED IN 2026 ===== */
 function isSuccessfullyRegistered(data) {
     const dangKy = normalizeValue(data["Đăng ký thành công"]).toUpperCase();
-    
-    // Chỉ "OK" mới là thành công, các trường hợp khác (Cross-check, rỗng, v.v.) đều là chưa thành công
     return dangKy === "OK";
 }
 
 /* ===== RENDER TABLE ===== */
-function render(keyword = "") {
+function render() {
     const tbody = document.getElementById("tbody");
     const statsDiv = document.getElementById("stats");
+    const keyword = document.getElementById("searchInput").value;
+    const statusFilter = document.getElementById("statusFilter").value;
     
     if (isLoading) {
         return;
@@ -314,11 +358,14 @@ function render(keyword = "") {
     for (const data of allData) {
         if (!data._search.includes(kw)) continue;
 
+        const isSuccess = isSuccessfullyRegistered(data);
+        
+        // Apply status filter
+        if (statusFilter === "success" && !isSuccess) continue;
+        if (statusFilter === "missing" && isSuccess) continue;
+
         const tr = document.createElement("tr");
         const maKH = normalizeValue(data["MÃ KH"]);
-        
-        // Check xem có đăng ký thành công 2026 không (OK mới là thành công)
-        const isSuccess = isSuccessfullyRegistered(data);
         
         tr.className = isSuccess ? "ok" : "missing";
         
@@ -369,8 +416,11 @@ function render(keyword = "") {
         tbody.innerHTML = "";
         tbody.appendChild(fragment);
         
+        const filterText = statusFilter === "all" ? "" : 
+                          statusFilter === "success" ? " (lọc: Đã tham gia)" : " (lọc: Chưa tham gia)";
+        
         statsDiv.innerHTML = `
-            📊 Tìm thấy <strong>${count}</strong> kết quả 
+            📊 Tìm thấy <strong>${count}</strong> kết quả${filterText}
             | ✅ Đã tham gia: <strong>${okCount}</strong> 
             | ❌ Chưa tham gia: <strong>${missingCount}</strong>
             ${count >= MAX_RENDER ? ` (Hiển thị tối đa ${MAX_RENDER} kết quả)` : ''}
@@ -385,11 +435,14 @@ function showMessage(msg) {
     tbody.innerHTML = `<tr><td colspan="10" class="loading">${msg}</td></tr>`;
 }
 
-/* ===== SEARCH WITH DEBOUNCE ===== */
+/* ===== EVENT LISTENERS ===== */
 document.getElementById("searchInput").addEventListener("input", e => {
     clearTimeout(debounceTimer);
-    const value = e.target.value;
-    debounceTimer = setTimeout(() => render(value), 250);
+    debounceTimer = setTimeout(() => render(), 250);
+});
+
+document.getElementById("statusFilter").addEventListener("change", () => {
+    render();
 });
 
 document.getElementById("searchInput").focus();
