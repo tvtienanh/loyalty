@@ -168,8 +168,8 @@ const OLD_URL = "https://docs.google.com/spreadsheets/d/14dZ70xuUlYskJHGLfF4dI_l
 
 const MAX_RENDER = 10000;
 
-let allData = []; // Chứa tất cả data từ cả 2 sheets
-let newDataSet = new Set(); // Set chứa Mã KH từ new_data
+let allData = [];
+let newDataMap = {}; // Map để check Mã KH có trong new_data không
 let debounceTimer;
 let isLoading = true;
 
@@ -179,6 +179,11 @@ function parseGViz(text) {
     return JSON.parse(jsonText);
 }
 
+function normalizeValue(val) {
+    if (val === null || val === undefined || val === "") return "";
+    return String(val).trim();
+}
+
 function rowToObject(cols, row) {
     const obj = {};
     cols.forEach((col, i) => {
@@ -186,7 +191,9 @@ function rowToObject(cols, row) {
         let value = "";
         
         if (cellValue !== null && cellValue !== undefined) {
-            value = cellValue.v !== null && cellValue.v !== undefined ? cellValue.v : "";
+            if (cellValue.v !== null && cellValue.v !== undefined) {
+                value = cellValue.v;
+            }
         }
         
         obj[col.label] = value;
@@ -208,67 +215,70 @@ async function loadData() {
         const newJson = parseGViz(newText);
         const oldJson = parseGViz(oldText);
 
+        console.log("New data rows:", newJson.table.rows.length);
+        console.log("Old data rows:", oldJson.table.rows.length);
+
         // Process new_data
-        const newDataArray = newJson.table.rows.map(row => {
+        const newDataArray = [];
+        newJson.table.rows.forEach(row => {
             const obj = rowToObject(newJson.table.cols, row);
             
-            // Chuẩn hóa số điện thoại
-            const sdt = obj["Số điện thoại di động"] ? String(obj["Số điện thoại di động"]) : "";
+            const maKH = normalizeValue(obj["MÃ KH"]);
+            const sdt = normalizeValue(obj["Số điện thoại di động"]);
+            const kh = normalizeValue(obj["KH"]);
+            const tdv = normalizeValue(obj["TDV"]);
             
-            obj._search = [
-                obj["MÃ KH"] || "",
-                obj["KH"] || "",
-                sdt,
-                obj["TDV"] || ""
-            ].join(" ").toLowerCase().trim();
+            obj._search = [maKH, kh, sdt, tdv].join(" ").toLowerCase();
+            obj._isNew = true;
             
-            obj._isNew = true; // Đánh dấu đây là data từ new_data
+            newDataArray.push(obj);
             
-            const maKH = obj["MÃ KH"] ? String(obj["MÃ KH"]) : "";
+            // Lưu vào map với key là Mã KH
             if (maKH) {
-                newDataSet.add(maKH);
+                newDataMap[maKH] = obj;
             }
-            
-            return obj;
         });
 
-        // Process original_data
-        const oldDataArray = oldJson.table.rows.map(row => {
+        // Process original_data - KHÔNG BỎ QUA bất kỳ record nào
+        const oldDataArray = [];
+        oldJson.table.rows.forEach(row => {
             const obj = rowToObject(oldJson.table.cols, row);
             
-            const sdt = obj["Số điện thoại di động"] ? String(obj["Số điện thoại di động"]) : "";
+            const maKH = normalizeValue(obj["MÃ KH"]);
+            const sdt = normalizeValue(obj["Số điện thoại di động"]);
+            const kh = normalizeValue(obj["KH"]);
+            const tdv = normalizeValue(obj["TDV"]);
             
-            obj._search = [
-                obj["MÃ KH"] || "",
-                obj["KH"] || "",
-                sdt,
-                obj["TDV"] || ""
-            ].join(" ").toLowerCase().trim();
+            obj._search = [maKH, kh, sdt, tdv].join(" ").toLowerCase();
+            obj._isNew = false;
             
-            obj._isNew = false; // Đánh dấu đây là data từ original_data
-            
-            return obj;
+            oldDataArray.push(obj);
         });
 
-        // Merge data: new_data + original_data (không trùng lặp)
-        allData = [...newDataArray];
-        
-        // Thêm các khách hàng từ original_data mà không có trong new_data
-        oldDataArray.forEach(oldItem => {
-            const maKH = oldItem["MÃ KH"] ? String(oldItem["MÃ KH"]) : "";
-            if (!newDataSet.has(maKH)) {
-                allData.push(oldItem);
-            }
-        });
+        // Merge: Tất cả new_data + tất cả original_data (không merge theo Mã KH)
+        // Giữ nguyên cả 2 bộ data để có đủ 11k records
+        allData = [...newDataArray, ...oldDataArray];
+
+        console.log("Total data loaded:", allData.length);
+        console.log("New data count:", newDataArray.length);
+        console.log("Old data count:", oldDataArray.length);
 
         isLoading = false;
-        showMessage(`✅ Đã tải ${allData.length} khách hàng (${newDataArray.length} mới + ${allData.length - newDataArray.length} cũ). Hãy nhập từ khóa để tìm kiếm.`);
+        showMessage(`✅ Đã tải ${allData.length} records (${newDataArray.length} từ new_data + ${oldDataArray.length} từ original_data). Hãy nhập từ khóa để tìm kiếm.`);
         
     } catch (error) {
         isLoading = false;
         showMessage("❌ Lỗi khi tải dữ liệu. Vui lòng thử lại sau.");
         console.error("Load error:", error);
     }
+}
+
+/* ===== CHECK IF CUSTOMER SUCCESSFULLY REGISTERED IN 2026 ===== */
+function isSuccessfullyRegistered(data) {
+    const dangKy = normalizeValue(data["Đăng ký thành công"]).toUpperCase();
+    
+    // Chỉ "OK" mới là thành công, các trường hợp khác (Cross-check, rỗng, v.v.) đều là chưa thành công
+    return dangKy === "OK";
 }
 
 /* ===== RENDER TABLE ===== */
@@ -296,41 +306,44 @@ function render(keyword = "") {
         if (!data._search.includes(kw)) continue;
 
         const tr = document.createElement("tr");
-        const maKH = data["MÃ KH"] ? String(data["MÃ KH"]) : "";
-        const isIn2026 = data._isNew; // Có trong new_data = đã tham gia 2026
+        const maKH = normalizeValue(data["MÃ KH"]);
         
-        tr.className = isIn2026 ? "ok" : "missing";
+        // Check xem có đăng ký thành công 2026 không (OK mới là thành công)
+        const isSuccess = isSuccessfullyRegistered(data);
         
-        if (isIn2026) {
+        tr.className = isSuccess ? "ok" : "missing";
+        
+        if (isSuccess) {
             okCount++;
         } else {
             missingCount++;
         }
 
-        // Lấy các trường dữ liệu
-        const teamKy2025 = data["TEAM ĐÃ KÝ 2025"] || "";
-        const teamKy2026 = data["TEAM KÝ 2026"] || "";
-        const dangKyThanhCong = data["Đăng ký thành công"] || "";
+        const teamKy2025 = normalizeValue(data["TEAM ĐÃ KÝ 2025"]);
+        const teamKy2026 = normalizeValue(data["TEAM KÝ 2026"]);
+        const dangKyThanhCong = normalizeValue(data["Đăng ký thành công"]);
         
-        // Ghi chú: kết hợp Note hình ảnh và Thông tin sai
-        const noteHinhAnh = data["Note hình ảnh"] || "";
-        const thongTinSai = data["Thông tin sai/thiếu (nếu có)"] || "";
+        const noteHinhAnh = normalizeValue(data["Note hình ảnh"]);
+        const thongTinSai = normalizeValue(data["Thông tin sai/thiếu (nếu có)"]);
         const note = [noteHinhAnh, thongTinSai].filter(n => n).join(" | ");
 
-        const sdt = data["Số điện thoại di động"] ? String(data["Số điện thoại di động"]) : "";
+        const sdt = normalizeValue(data["Số điện thoại di động"]);
+        const khachHang = normalizeValue(data["KH"]);
+        const tinh = normalizeValue(data["Tỉnh"]);
+        const tdvName = normalizeValue(data["TDV"]);
 
         tr.innerHTML = `
             <td>${maKH}</td>
-            <td>${data["KH"] || ""}</td>
-            <td>${data["Tỉnh"] || ""}</td>
+            <td>${khachHang}</td>
+            <td>${tinh}</td>
             <td>${sdt}</td>
-            <td>${data["TDV"] || ""}</td>
+            <td>${tdvName}</td>
             <td>${teamKy2025}</td>
             <td>${teamKy2026}</td>
             <td>${dangKyThanhCong}</td>
             <td>${note}</td>
-            <td class="${isIn2026 ? 'status-ok' : 'status-missing'}">
-                ${isIn2026 ? "✅ Đã tham gia" : "❌ Chưa tham gia"}
+            <td class="${isSuccess ? 'status-ok' : 'status-missing'}">
+                ${isSuccess ? "✅ Đã tham gia" : "❌ Chưa tham gia"}
             </td>
         `;
 
@@ -370,10 +383,8 @@ document.getElementById("searchInput").addEventListener("input", e => {
     debounceTimer = setTimeout(() => render(value), 250);
 });
 
-// Auto focus on search input
 document.getElementById("searchInput").focus();
 
-// Load data on page load
 loadData();
 </script>
 
