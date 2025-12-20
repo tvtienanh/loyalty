@@ -35,33 +35,23 @@
     
     .filter-box {
         margin-bottom: 20px;
-        display: flex;
-        gap: 15px;
-        align-items: center;
-        flex-wrap: wrap;
+        padding: 15px;
+        background: #f9f9f9;
+        border-radius: 6px;
     }
     
     .filter-box label {
-        font-weight: 600;
-        color: #555;
-    }
-    
-    .filter-box select {
-        padding: 8px 12px;
-        border: 2px solid #ddd;
-        border-radius: 6px;
-        font-size: 14px;
-        background: white;
+        margin-right: 15px;
         cursor: pointer;
-        transition: border-color 0.3s;
+        font-size: 14px;
     }
     
-    .filter-box select:focus {
-        outline: none;
-        border-color: #4CAF50;
+    .filter-box input[type="radio"] {
+        margin-right: 5px;
+        cursor: pointer;
     }
     
-    input { 
+    input[type="text"] { 
         width: 100%;
         max-width: 500px;
         padding: 12px 16px; 
@@ -71,7 +61,7 @@
         transition: border-color 0.3s;
     }
     
-    input:focus {
+    input[type="text"]:focus {
         outline: none;
         border-color: #4CAF50;
     }
@@ -157,6 +147,7 @@
     
     <div class="search-box">
         <input 
+            type="text"
             id="searchInput" 
             placeholder="Nhập Mã KH / Tên khách hàng / SĐT / Tên TDV để tìm kiếm..."
             autocomplete="off"
@@ -164,12 +155,16 @@
     </div>
     
     <div class="filter-box">
-        <label for="statusFilter">Lọc trạng thái:</label>
-        <select id="statusFilter">
-            <option value="all">Tất cả</option>
-            <option value="success">✅ Đã tham gia</option>
-            <option value="missing">❌ Chưa tham gia</option>
-        </select>
+        <strong>Lọc trạng thái:</strong>
+        <label>
+            <input type="radio" name="statusFilter" value="all" checked> Tất cả
+        </label>
+        <label>
+            <input type="radio" name="statusFilter" value="ok"> ✅ Đã tham gia
+        </label>
+        <label>
+            <input type="radio" name="statusFilter" value="missing"> ❌ Chưa tham gia
+        </label>
     </div>
     
     <div id="stats" class="stats" style="display:none;"></div>
@@ -206,8 +201,10 @@ const OLD_URL = "https://docs.google.com/spreadsheets/d/14dZ70xuUlYskJHGLfF4dI_l
 const MAX_RENDER = 10000;
 
 let allData = [];
+let uniqueData = []; // Data sau khi loại bỏ trùng lặp
 let debounceTimer;
 let isLoading = true;
+let currentFilter = 'all';
 
 /* ===== PARSE GOOGLE VISUALIZATION JSON ===== */
 function parseGViz(text) {
@@ -237,14 +234,18 @@ function rowToObject(cols, row) {
     return obj;
 }
 
-/* ===== CREATE UNIQUE KEY ===== */
-function createUniqueKey(maKH, tenKH, sdt) {
-    // Tạo unique key từ MÃ KH + Tên KH + SĐT để loại bỏ trùng lặp
-    const normalizedMaKH = normalizeValue(maKH).toLowerCase();
-    const normalizedTenKH = normalizeValue(tenKH).toLowerCase();
-    const normalizedSDT = normalizeValue(sdt).replace(/\D/g, ''); // Chỉ giữ số
-    
-    return `${normalizedMaKH}|${normalizedTenKH}|${normalizedSDT}`;
+/* ===== CREATE UNIQUE KEY FOR DEDUPLICATION ===== */
+function createUniqueKey(kh, sdt) {
+    // Tạo key duy nhất từ KH + SĐT (lowercase, loại bỏ khoảng trắng)
+    const khNorm = normalizeValue(kh).toLowerCase().replace(/\s+/g, '');
+    const sdtNorm = normalizeValue(sdt).replace(/\s+/g, '');
+    return `${khNorm}|${sdtNorm}`;
+}
+
+/* ===== CHECK IF CUSTOMER SUCCESSFULLY REGISTERED IN 2026 ===== */
+function isSuccessfullyRegistered(data) {
+    const dangKy = normalizeValue(data["Đăng ký thành công"]).toUpperCase();
+    return dangKy === "OK";
 }
 
 /* ===== LOAD DATA ===== */
@@ -265,10 +266,8 @@ async function loadData() {
         console.log("New data rows:", newJson.table.rows.length);
         console.log("Old data rows:", oldJson.table.rows.length);
 
-        // Map để loại bỏ trùng lặp
-        const dataMap = new Map();
-        
-        // Process new_data TRƯỚC (ưu tiên new_data)
+        // Process new_data
+        const newDataArray = [];
         newJson.table.rows.forEach(row => {
             const obj = rowToObject(newJson.table.cols, row);
             
@@ -279,17 +278,13 @@ async function loadData() {
             
             obj._search = [maKH, kh, sdt, tdv].join(" ").toLowerCase();
             obj._isNew = true;
+            obj._uniqueKey = createUniqueKey(kh, sdt);
             
-            // Tạo unique key để check trùng
-            const uniqueKey = createUniqueKey(maKH, kh, sdt);
-            
-            // Lưu vào map (new_data được ưu tiên)
-            dataMap.set(uniqueKey, obj);
+            newDataArray.push(obj);
         });
 
-        const newDataCount = dataMap.size;
-
-        // Process original_data SAU
+        // Process original_data
+        const oldDataArray = [];
         oldJson.table.rows.forEach(row => {
             const obj = rowToObject(oldJson.table.cols, row);
             
@@ -300,24 +295,37 @@ async function loadData() {
             
             obj._search = [maKH, kh, sdt, tdv].join(" ").toLowerCase();
             obj._isNew = false;
+            obj._uniqueKey = createUniqueKey(kh, sdt);
             
-            const uniqueKey = createUniqueKey(maKH, kh, sdt);
-            
-            // Chỉ thêm nếu CHƯA tồn tại trong map (tránh trùng với new_data)
-            if (!dataMap.has(uniqueKey)) {
-                dataMap.set(uniqueKey, obj);
-            }
+            oldDataArray.push(obj);
         });
 
-        // Chuyển Map thành Array
-        allData = Array.from(dataMap.values());
-
-        console.log("Total unique data:", allData.length);
-        console.log("New data count:", newDataCount);
-        console.log("Old data count (unique):", allData.length - newDataCount);
+        // Merge và loại bỏ trùng lặp dựa trên KH + SĐT
+        // Ưu tiên data từ new_data (có thông tin mới nhất)
+        const dataMap = new Map();
+        
+        // Thêm old data trước
+        oldDataArray.forEach(item => {
+            if (item._uniqueKey) {
+                dataMap.set(item._uniqueKey, item);
+            }
+        });
+        
+        // Thêm new data sau (sẽ ghi đè nếu trùng)
+        newDataArray.forEach(item => {
+            if (item._uniqueKey) {
+                dataMap.set(item._uniqueKey, item);
+            }
+        });
+        
+        uniqueData = Array.from(dataMap.values());
+        
+        console.log("Total raw data:", newDataArray.length + oldDataArray.length);
+        console.log("Unique data after deduplication:", uniqueData.length);
+        console.log("Duplicates removed:", (newDataArray.length + oldDataArray.length) - uniqueData.length);
 
         isLoading = false;
-        showMessage(`✅ Đã tải ${allData.length} khách hàng duy nhất (${newDataCount} từ new_data + ${allData.length - newDataCount} từ original_data). Hãy nhập từ khóa để tìm kiếm.`);
+        showMessage(`✅ Đã tải ${uniqueData.length} khách hàng duy nhất (từ ${newDataArray.length} new + ${oldDataArray.length} old, đã loại bỏ ${(newDataArray.length + oldDataArray.length) - uniqueData.length} bản ghi trùng). Hãy nhập từ khóa để tìm kiếm.`);
         
     } catch (error) {
         isLoading = false;
@@ -326,18 +334,10 @@ async function loadData() {
     }
 }
 
-/* ===== CHECK IF CUSTOMER SUCCESSFULLY REGISTERED IN 2026 ===== */
-function isSuccessfullyRegistered(data) {
-    const dangKy = normalizeValue(data["Đăng ký thành công"]).toUpperCase();
-    return dangKy === "OK";
-}
-
 /* ===== RENDER TABLE ===== */
-function render() {
+function render(keyword = "") {
     const tbody = document.getElementById("tbody");
     const statsDiv = document.getElementById("stats");
-    const keyword = document.getElementById("searchInput").value;
-    const statusFilter = document.getElementById("statusFilter").value;
     
     if (isLoading) {
         return;
@@ -355,14 +355,14 @@ function render() {
     let okCount = 0;
     let missingCount = 0;
 
-    for (const data of allData) {
+    for (const data of uniqueData) {
         if (!data._search.includes(kw)) continue;
 
         const isSuccess = isSuccessfullyRegistered(data);
         
         // Apply status filter
-        if (statusFilter === "success" && !isSuccess) continue;
-        if (statusFilter === "missing" && isSuccess) continue;
+        if (currentFilter === 'ok' && !isSuccess) continue;
+        if (currentFilter === 'missing' && isSuccess) continue;
 
         const tr = document.createElement("tr");
         const maKH = normalizeValue(data["MÃ KH"]);
@@ -416,8 +416,9 @@ function render() {
         tbody.innerHTML = "";
         tbody.appendChild(fragment);
         
-        const filterText = statusFilter === "all" ? "" : 
-                          statusFilter === "success" ? " (lọc: Đã tham gia)" : " (lọc: Chưa tham gia)";
+        const filterText = currentFilter === 'all' ? '' : 
+                          currentFilter === 'ok' ? ' (Chỉ hiển thị đã tham gia)' :
+                          ' (Chỉ hiển thị chưa tham gia)';
         
         statsDiv.innerHTML = `
             📊 Tìm thấy <strong>${count}</strong> kết quả${filterText}
@@ -435,14 +436,20 @@ function showMessage(msg) {
     tbody.innerHTML = `<tr><td colspan="10" class="loading">${msg}</td></tr>`;
 }
 
-/* ===== EVENT LISTENERS ===== */
+/* ===== SEARCH WITH DEBOUNCE ===== */
 document.getElementById("searchInput").addEventListener("input", e => {
     clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(() => render(), 250);
+    const value = e.target.value;
+    debounceTimer = setTimeout(() => render(value), 250);
 });
 
-document.getElementById("statusFilter").addEventListener("change", () => {
-    render();
+/* ===== STATUS FILTER ===== */
+document.querySelectorAll('input[name="statusFilter"]').forEach(radio => {
+    radio.addEventListener('change', e => {
+        currentFilter = e.target.value;
+        const keyword = document.getElementById("searchInput").value;
+        render(keyword);
+    });
 });
 
 document.getElementById("searchInput").focus();
