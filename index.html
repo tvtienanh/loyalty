@@ -191,7 +191,11 @@ function rowToObject(cols, row) {
         let value = "";
         
         if (cellValue !== null && cellValue !== undefined) {
-            if (cellValue.v !== null && cellValue.v !== undefined) {
+            // SỬA ĐỔI: Kiểm tra .f (formatted) trước. 
+            // Nếu là dạng text trong cột số, .v sẽ null nhưng .f sẽ có dữ liệu.
+            if (cellValue.f !== null && cellValue.f !== undefined) {
+                value = cellValue.f;
+            } else if (cellValue.v !== null && cellValue.v !== undefined) {
                 value = cellValue.v;
             }
         }
