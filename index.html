@@ -84,24 +84,33 @@
         z-index: 10;
     }
     
-    tr.ok { 
+    tr.in-both { 
         background: #e8f5e9; 
     }
     
-    tr.missing { 
+    tr.only-new { 
+        background: #fff3e0; 
+    }
+    
+    tr.only-old { 
         background: #ffebee; 
     }
     
     tr:hover {
-        background: #f5f5f5 !important;
+        opacity: 0.8;
     }
     
-    .status-ok {
+    .status-in-both {
         color: #2e7d32;
         font-weight: 600;
     }
     
-    .status-missing {
+    .status-only-new {
+        color: #f57c00;
+        font-weight: 600;
+    }
+    
+    .status-only-old {
         color: #c62828;
         font-weight: 600;
     }
@@ -168,8 +177,7 @@ const OLD_URL = "https://docs.google.com/spreadsheets/d/14dZ70xuUlYskJHGLfF4dI_l
 
 const MAX_RENDER = 500;
 
-let newData = [];
-let originalMap = {};
+let mergedData = []; // Merge cả new và old data
 let debounceTimer;
 let isLoading = true;
 
@@ -182,8 +190,18 @@ function parseGViz(text) {
 function rowToObject(cols, row) {
     const obj = {};
     cols.forEach((col, i) => {
-        const value = row.c[i] ? row.c[i].v : "";
-        obj[col.label] = value || "";
+        const cell = row.c[i];
+        let value = "";
+        
+        if (cell !== null && cell !== undefined) {
+            if (cell.v !== null && cell.v !== undefined) {
+                value = cell.v;
+            } else if (cell.f !== null && cell.f !== undefined) {
+                value = cell.f;
+            }
+        }
+        
+        obj[col.label] = String(value).trim();
     });
     return obj;
 }
@@ -202,32 +220,111 @@ async function loadData() {
         const newJson = parseGViz(newText);
         const oldJson = parseGViz(oldText);
 
-        // Process new_data
-        newData = newJson.table.rows.map(row => {
-            const obj = rowToObject(newJson.table.cols, row);
-            
-            // Create search string for faster filtering
-            obj._search = [
-                obj["MÃ KH"] || "",
-                obj["KH"] || "",
-                obj["SĐT"] || "",
-                obj["TDV"] || ""
-            ].join(" ").toLowerCase().trim();
-            
-            return obj;
-        });
+        console.log("New data columns:", newJson.table.cols.map(c => c.label));
+        console.log("Old data columns:", oldJson.table.cols.map(c => c.label));
 
-        // Process original_data - create map for quick lookup
-        oldJson.table.rows.forEach(row => {
-            const obj = rowToObject(oldJson.table.cols, row);
-            const maKH = obj["MÃ KH"];
+        // Process new_data into a map
+        const newDataMap = {};
+        newJson.table.rows.forEach(row => {
+            const obj = rowToObject(newJson.table.cols, row);
+            const maKH = (obj["MÃ KH"] || "").trim();
             if (maKH) {
-                originalMap[maKH] = true;
+                newDataMap[maKH] = {
+                    maKH: maKH,
+                    kh: obj["KH"] || "",
+                    tinh: obj["TỈNH"] || "",
+                    sdt: obj["SĐT"] || "",
+                    tdv: obj["TDV"] || "",
+                    team2025: obj["TEAM ĐÃ KÝ 2025"] || "",
+                    team2026: obj["TEAM ĐÃ KÝ 2026"] || "",
+                    dangKy: obj["ĐĂNG KÝ THÀNH CÔNG"] || "",
+                    noteHinh: obj["NOTE HÌNH ẢNH"] || "",
+                    thongTinSai: obj["THÔNG TIN SAI"] || "",
+                    inNew: true,
+                    inOld: false
+                };
             }
         });
 
+        // Process original_data
+        const oldDataMap = {};
+        oldJson.table.rows.forEach(row => {
+            const obj = rowToObject(oldJson.table.cols, row);
+            const maKH = (obj["MÃ KH"] || "").trim();
+            if (maKH) {
+                oldDataMap[maKH] = {
+                    maKH: maKH,
+                    kh: obj["KH"] || "",
+                    sdt: obj["SĐT"] || "",
+                    tdv: obj["TDV"] || "",
+                    team2025: obj["TEAM"] || "",
+                    inOld: true
+                };
+            }
+        });
+
+        // Merge data: combine both sources
+        const allMaKH = new Set([
+            ...Object.keys(newDataMap),
+            ...Object.keys(oldDataMap)
+        ]);
+
+        mergedData = [];
+        allMaKH.forEach(maKH => {
+            const newRecord = newDataMap[maKH];
+            const oldRecord = oldDataMap[maKH];
+
+            if (newRecord && oldRecord) {
+                // Có trong cả 2
+                newRecord.inOld = true;
+                newRecord.status = "in-both";
+                mergedData.push(newRecord);
+            } else if (newRecord) {
+                // Chỉ có trong new (khách hàng mới)
+                newRecord.status = "only-new";
+                mergedData.push(newRecord);
+            } else if (oldRecord) {
+                // Chỉ có trong old (đã tham gia 2025 nhưng chưa đăng ký 2026)
+                const record = {
+                    maKH: oldRecord.maKH,
+                    kh: oldRecord.kh,
+                    tinh: "",
+                    sdt: oldRecord.sdt,
+                    tdv: oldRecord.tdv,
+                    team2025: oldRecord.team2025,
+                    team2026: "",
+                    dangKy: "",
+                    noteHinh: "",
+                    thongTinSai: "",
+                    inNew: false,
+                    inOld: true,
+                    status: "only-old"
+                };
+                mergedData.push(record);
+            }
+        });
+
+        // Create search string for each record
+        mergedData.forEach(record => {
+            const searchFields = [
+                record.maKH,
+                record.kh,
+                record.sdt,
+                record.tdv,
+                record.tinh
+            ];
+            record._search = searchFields.join(" ").toLowerCase().trim();
+        });
+
         isLoading = false;
-        showMessage(`✅ Đã tải ${newData.length} khách hàng. Hãy nhập từ khóa để tìm kiếm.`);
+        
+        console.log("Sample merged data:", mergedData.slice(0, 3));
+        console.log("Total records:", mergedData.length);
+        console.log("In both:", mergedData.filter(r => r.status === "in-both").length);
+        console.log("Only new:", mergedData.filter(r => r.status === "only-new").length);
+        console.log("Only old:", mergedData.filter(r => r.status === "only-old").length);
+        
+        showMessage(`✅ Đã tải ${mergedData.length} khách hàng (${Object.keys(newDataMap).length} new + ${Object.keys(oldDataMap).length} old). Hãy nhập từ khóa để tìm kiếm.`);
         
     } catch (error) {
         isLoading = false;
@@ -254,42 +351,53 @@ function render(keyword = "") {
     const kw = keyword.toLowerCase().trim();
     const fragment = document.createDocumentFragment();
     let count = 0;
-    let okCount = 0;
-    let missingCount = 0;
+    let inBothCount = 0;
+    let onlyNewCount = 0;
+    let onlyOldCount = 0;
 
-    for (const data of newData) {
-        if (!data._search.includes(kw)) continue;
+    for (const record of mergedData) {
+        if (!record._search.includes(kw)) continue;
 
         const tr = document.createElement("tr");
-        const maKH = data["MÃ KH"];
-        const existed = originalMap[maKH];
+        tr.className = record.status;
         
-        tr.className = existed ? "ok" : "missing";
-        
-        if (existed) {
-            okCount++;
+        if (record.status === "in-both") {
+            inBothCount++;
+        } else if (record.status === "only-new") {
+            onlyNewCount++;
         } else {
-            missingCount++;
+            onlyOldCount++;
         }
 
-        const note = [
-            data["NOTE HÌNH ẢNH"] || "",
-            data["THÔNG TIN SAI"] || ""
-        ].filter(n => n).join(" | ");
+        const note = [record.noteHinh, record.thongTinSai]
+            .filter(n => n && n.trim())
+            .join(" | ");
+
+        let statusText = "";
+        let statusClass = "";
+        
+        if (record.status === "in-both") {
+            statusText = "✅ Đã tham gia 2025 & 2026";
+            statusClass = "status-in-both";
+        } else if (record.status === "only-new") {
+            statusText = "🆕 Mới tham gia 2026";
+            statusClass = "status-only-new";
+        } else {
+            statusText = "❌ Chỉ có 2025, chưa đăng ký 2026";
+            statusClass = "status-only-old";
+        }
 
         tr.innerHTML = `
-            <td>${data["MÃ KH"] || ""}</td>
-            <td>${data["KH"] || ""}</td>
-            <td>${data["TỈNH"] || ""}</td>
-            <td>${data["SĐT"] || ""}</td>
-            <td>${data["TDV"] || ""}</td>
-            <td>${data["TEAM ĐÃ KÝ 2025"] || ""}</td>
-            <td>${data["TEAM ĐÃ KÝ 2026"] || ""}</td>
-            <td>${data["ĐĂNG KÝ THÀNH CÔNG"] || ""}</td>
+            <td>${record.maKH}</td>
+            <td>${record.kh}</td>
+            <td>${record.tinh}</td>
+            <td>${record.sdt}</td>
+            <td>${record.tdv}</td>
+            <td>${record.team2025}</td>
+            <td>${record.team2026}</td>
+            <td>${record.dangKy}</td>
             <td>${note}</td>
-            <td class="${existed ? 'status-ok' : 'status-missing'}">
-                ${existed ? "✅ Đã tham gia" : "❌ Chưa tham gia"}
-            </td>
+            <td class="${statusClass}">${statusText}</td>
         `;
 
         fragment.appendChild(tr);
@@ -307,8 +415,9 @@ function render(keyword = "") {
         
         statsDiv.innerHTML = `
             📊 Tìm thấy <strong>${count}</strong> kết quả 
-            | ✅ Đã tham gia: <strong>${okCount}</strong> 
-            | ❌ Chưa tham gia: <strong>${missingCount}</strong>
+            | ✅ Cả 2025 & 2026: <strong>${inBothCount}</strong> 
+            | 🆕 Chỉ 2026: <strong>${onlyNewCount}</strong>
+            | ❌ Chỉ 2025: <strong>${onlyOldCount}</strong>
             ${count >= MAX_RENDER ? ` (Hiển thị tối đa ${MAX_RENDER} kết quả)` : ''}
         `;
         statsDiv.style.display = "block";
