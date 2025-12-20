@@ -2,56 +2,23 @@
 <html lang="vi">
 <head>
 <meta charset="UTF-8">
-<title>Tra cứu Loyalty – So sánh CT 2026</title>
+<title>Tra cứu Loyalty – CT 2026 (Optimized)</title>
 
 <style>
-    body {
-        font-family: Arial, sans-serif;
-        padding: 20px;
-        background: #fafafa;
-    }
-    h2 {
-        margin-bottom: 10px;
-    }
-    input {
-        width: 420px;
-        padding: 8px;
-        font-size: 14px;
-    }
-    table {
-        border-collapse: collapse;
-        width: 100%;
-        margin-top: 15px;
-        background: #fff;
-    }
-    th, td {
-        border: 1px solid #ccc;
-        padding: 6px;
-        font-size: 13px;
-        vertical-align: top;
-    }
-    th {
-        background: #f2f2f2;
-        position: sticky;
-        top: 0;
-    }
-    tr.ok {
-        background: #e9ffe9;
-    }
-    tr.missing {
-        background: #ffe9e9;
-    }
+    body { font-family: Arial; padding: 20px; background: #fafafa; }
+    input { width: 420px; padding: 8px; font-size: 14px; }
+    table { border-collapse: collapse; width: 100%; margin-top: 15px; background: #fff; }
+    th, td { border: 1px solid #ccc; padding: 6px; font-size: 13px; }
+    th { background: #f2f2f2; position: sticky; top: 0; }
+    tr.ok { background: #e9ffe9; }
+    tr.missing { background: #ffe9e9; }
 </style>
 </head>
 
 <body>
 
 <h2>Tra cứu khách hàng Loyalty – Kiểm tra CT 2026</h2>
-
-<input
-  id="searchInput"
-  placeholder="Nhập Mã KH / Tên KH / SĐT / TDV"
-/>
+<input id="searchInput" placeholder="Nhập Mã KH / KH / SĐT / TDV">
 
 <table>
 <thead>
@@ -65,7 +32,7 @@
     <th>Team ký 2026</th>
     <th>Đăng ký thành công</th>
     <th>Ghi chú</th>
-    <th>Trạng thái CT 2026</th>
+    <th>Trạng thái 2026</th>
 </tr>
 </thead>
 <tbody id="tbody"></tbody>
@@ -78,25 +45,24 @@ const NEW_URL =
 const OLD_URL =
 "https://docs.google.com/spreadsheets/d/14dZ70xuUlYskJHGLfF4dI_lY_V8vsqJfAJ-Dlo_DdrU/gviz/tq?tqx=out:json&sheet=original_data";
 
+const MAX_RENDER = 300;
+
 let newData = [];
 let originalMap = {};
+let debounceTimer;
 
-/* ===== CORE FUNCTIONS ===== */
-
+/* ===== CORE ===== */
 function parseGViz(text) {
     return JSON.parse(text.substring(47, text.length - 2));
 }
 
 function rowToObject(cols, row) {
     const obj = {};
-    cols.forEach((c, i) => {
-        obj[c.label] = row.c[i] ? row.c[i].v : "";
-    });
+    cols.forEach((c, i) => obj[c.label] = row.c[i]?.v || "");
     return obj;
 }
 
 /* ===== LOAD DATA ===== */
-
 Promise.all([
     fetch(NEW_URL).then(r => r.text()),
     fetch(OLD_URL).then(r => r.text())
@@ -105,37 +71,42 @@ Promise.all([
     const newJson = parseGViz(newText);
     const oldJson = parseGViz(oldText);
 
-    newData = newJson.table.rows.map(r =>
-        rowToObject(newJson.table.cols, r)
-    );
+    newData = newJson.table.rows.map(r => {
+        const o = rowToObject(newJson.table.cols, r);
+        o._search = (
+            (o["MÃ KH"] || "") + " " +
+            (o["KH"] || "") + " " +
+            (o["SĐT"] || "") + " " +
+            (o["TDV"] || "")
+        ).toLowerCase();
+        return o;
+    });
 
     oldJson.table.rows.forEach(r => {
-        const obj = rowToObject(oldJson.table.cols, r);
-        if (obj["MÃ KH"]) {
-            originalMap[obj["MÃ KH"]] = true;
-        }
+        const o = rowToObject(oldJson.table.cols, r);
+        if (o["MÃ KH"]) originalMap[o["MÃ KH"]] = true;
     });
 });
 
 /* ===== RENDER ===== */
-
 function render(keyword = "") {
     const tbody = document.getElementById("tbody");
     tbody.innerHTML = "";
 
+    if (!keyword) return;
+
     const kw = keyword.toLowerCase();
+    const frag = document.createDocumentFragment();
+    let count = 0;
 
-    newData
-      .filter(d =>
-        Object.values(d).join(" ").toLowerCase().includes(kw)
-      )
-      .forEach(d => {
+    for (const d of newData) {
+        if (!d._search.includes(kw)) continue;
 
+        const tr = document.createElement("tr");
         const existed = originalMap[d["MÃ KH"]];
-        const note = `${d["NOTE HÌNH ẢNH"] || ""} ${d["THÔNG TIN SAI"] || ""}`;
+        tr.className = existed ? "ok" : "missing";
 
-        tbody.innerHTML += `
-        <tr class="${existed ? "ok" : "missing"}">
+        tr.innerHTML = `
             <td>${d["MÃ KH"] || ""}</td>
             <td>${d["KH"] || ""}</td>
             <td>${d["TỈNH"] || ""}</td>
@@ -144,16 +115,23 @@ function render(keyword = "") {
             <td>${d["TEAM ĐÃ KÝ 2025"] || ""}</td>
             <td>${d["TEAM ĐÃ KÝ 2026"] || ""}</td>
             <td>${d["ĐĂNG KÝ THÀNH CÔNG"] || ""}</td>
-            <td>${note}</td>
+            <td>${(d["NOTE HÌNH ẢNH"] || "") + " " + (d["THÔNG TIN SAI"] || "")}</td>
             <td>${existed ? "✅ Đã tham gia" : "❌ Chưa tham gia"}</td>
-        </tr>`;
-      });
+        `;
+
+        frag.appendChild(tr);
+        if (++count >= MAX_RENDER) break;
+    }
+
+    tbody.appendChild(frag);
 }
 
-/* ===== SEARCH EVENT ===== */
-
-document.getElementById("searchInput")
-  .addEventListener("input", e => render(e.target.value));
+/* ===== SEARCH (DEBOUNCE) ===== */
+document.getElementById("searchInput").addEventListener("input", e => {
+    clearTimeout(debounceTimer);
+    const value = e.target.value;
+    debounceTimer = setTimeout(() => render(value), 200);
+});
 </script>
 
 </body>
