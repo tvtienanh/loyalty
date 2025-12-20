@@ -84,24 +84,16 @@
         z-index: 10;
     }
     
-    tr.ok-both { 
+    tr.ok { 
         background: #e8f5e9; 
     }
     
-    tr.only-2026 { 
-        background: #fff3e0; 
-    }
-    
-    tr.only-2025 { 
+    tr.missing { 
         background: #ffebee; 
     }
     
-    tr.pending-2026 {
-        background: #fff9c4;
-    }
-    
     tr:hover {
-        opacity: 0.85;
+        background: #f5f5f5 !important;
     }
     
     .status-ok {
@@ -109,18 +101,8 @@
         font-weight: 600;
     }
     
-    .status-new {
-        color: #f57c00;
-        font-weight: 600;
-    }
-    
     .status-missing {
         color: #c62828;
-        font-weight: 600;
-    }
-    
-    .status-pending {
-        color: #f9a825;
         font-weight: 600;
     }
     
@@ -184,14 +166,10 @@
 const NEW_URL = "https://docs.google.com/spreadsheets/d/14dZ70xuUlYskJHGLfF4dI_lY_V8vsqJfAJ-Dlo_DdrU/gviz/tq?tqx=out:json&sheet=new_data";
 const OLD_URL = "https://docs.google.com/spreadsheets/d/14dZ70xuUlYskJHGLfF4dI_lY_V8vsqJfAJ-Dlo_DdrU/gviz/tq?tqx=out:json&sheet=original_data";
 
-const MAX_RENDER = 1000;
+const MAX_RENDER = 500;
 
-// Lưu riêng biệt, KHÔNG merge
-let newDataMap = {};      // Key: Mã KH, Value: full record from new_data
-let oldDataMap = {};      // Key: Mã KH, Value: full record from original_data
-let allMaKH = new Set();  // Tất cả Mã KH từ cả 2 nguồn
-let searchArray = [];     // Array để search
-
+let newData = [];
+let originalMap = {};
 let debounceTimer;
 let isLoading = true;
 
@@ -204,18 +182,8 @@ function parseGViz(text) {
 function rowToObject(cols, row) {
     const obj = {};
     cols.forEach((col, i) => {
-        const cell = row.c[i];
-        let value = "";
-        
-        if (cell !== null && cell !== undefined) {
-            if (cell.v !== null && cell.v !== undefined) {
-                value = cell.v;
-            } else if (cell.f !== null && cell.f !== undefined) {
-                value = cell.f;
-            }
-        }
-        
-        obj[col.label] = String(value).trim();
+        const value = row.c[i] ? row.c[i].v : "";
+        obj[col.label] = value || "";
     });
     return obj;
 }
@@ -234,97 +202,32 @@ async function loadData() {
         const newJson = parseGViz(newText);
         const oldJson = parseGViz(oldText);
 
-        console.log("=== COLUMNS ===");
-        console.log("New data columns:", newJson.table.cols.map(c => c.label));
-        console.log("Old data columns:", oldJson.table.cols.map(c => c.label));
-
-        // Load new_data - GIỮ NGUYÊN, KHÔNG MERGE
-        console.log("Loading new_data...");
-        newJson.table.rows.forEach(row => {
+        // Process new_data
+        newData = newJson.table.rows.map(row => {
             const obj = rowToObject(newJson.table.cols, row);
-            const maKH = obj["MÃ KH"];
             
-            if (maKH) {
-                newDataMap[maKH] = obj;
-                allMaKH.add(maKH);
-            }
+            // Create search string for faster filtering
+            obj._search = [
+                obj["MÃ KH"] || "",
+                obj["KH"] || "",
+                obj["SĐT"] || "",
+                obj["TDV"] || ""
+            ].join(" ").toLowerCase().trim();
+            
+            return obj;
         });
 
-        console.log("new_data loaded:", Object.keys(newDataMap).length, "records");
-
-        // Load original_data - GIỮ NGUYÊN, KHÔNG MERGE
-        console.log("Loading original_data...");
+        // Process original_data - create map for quick lookup
         oldJson.table.rows.forEach(row => {
             const obj = rowToObject(oldJson.table.cols, row);
             const maKH = obj["MÃ KH"];
-            
             if (maKH) {
-                oldDataMap[maKH] = obj;
-                allMaKH.add(maKH);
+                originalMap[maKH] = true;
             }
         });
 
-        console.log("original_data loaded:", Object.keys(oldDataMap).length, "records");
-        console.log("Total unique Mã KH:", allMaKH.size);
-
-        // Tạo search array từ TẤT CẢ Mã KH
-        console.log("Building search array...");
-        searchArray = Array.from(allMaKH).map(maKH => {
-            const newRec = newDataMap[maKH];
-            const oldRec = oldDataMap[maKH];
-
-            // Lấy thông tin từ new_data nếu có, không thì từ old_data
-            const record = {
-                maKH: maKH,
-                kh: (newRec && newRec["KH"]) || (oldRec && oldRec["KH"]) || "",
-                tinh: (newRec && newRec["TỈNH"]) || "",
-                sdt: (newRec && newRec["SĐT"]) || (oldRec && oldRec["SĐT"]) || "",
-                tdv: (newRec && newRec["TDV"]) || (oldRec && oldRec["TDV"]) || "",
-                team2025: (newRec && newRec["TEAM ĐÃ KÝ 2025"]) || (oldRec && oldRec["TEAM"]) || "",
-                team2026: (newRec && newRec["TEAM ĐÃ KÝ 2026"]) || "",
-                dangKy: (newRec && newRec["ĐĂNG KÝ THÀNH CÔNG"]) || "",
-                noteHinh: (newRec && newRec["NOTE HÌNH ẢNH"]) || "",
-                thongTinSai: (newRec && newRec["THÔNG TIN SAI"]) || "",
-                inNew: !!newRec,
-                inOld: !!oldRec
-            };
-
-            // Tạo search string
-            const searchFields = [
-                record.maKH,
-                record.kh,
-                record.sdt,
-                record.tdv,
-                record.tinh
-            ];
-            record._search = searchFields.join(" ").toLowerCase();
-
-            return record;
-        });
-
-        console.log("Search array built:", searchArray.length, "records");
-
-        // Thống kê
-        const stats = {
-            inBoth: searchArray.filter(r => r.inNew && r.inOld).length,
-            onlyNew: searchArray.filter(r => r.inNew && !r.inOld).length,
-            onlyOld: searchArray.filter(r => !r.inNew && r.inOld).length,
-            ok2026: searchArray.filter(r => r.dangKy === "OK").length,
-            cancel2026: searchArray.filter(r => r.dangKy === "Cancel").length,
-            crosscheck2026: searchArray.filter(r => r.dangKy === "Cross-check").length
-        };
-
-        console.log("=== STATISTICS ===");
-        console.log("Total records:", searchArray.length);
-        console.log("In both 2025 & 2026:", stats.inBoth);
-        console.log("Only in 2026 (new):", stats.onlyNew);
-        console.log("Only in 2025 (not registered 2026):", stats.onlyOld);
-        console.log("2026 status - OK:", stats.ok2026);
-        console.log("2026 status - Cancel:", stats.cancel2026);
-        console.log("2026 status - Cross-check:", stats.crosscheck2026);
-
         isLoading = false;
-        showMessage(`✅ Đã tải ${searchArray.length} khách hàng (New: ${Object.keys(newDataMap).length}, Old: ${Object.keys(oldDataMap).length}). Hãy nhập từ khóa để tìm kiếm.`);
+        showMessage(`✅ Đã tải ${newData.length} khách hàng. Hãy nhập từ khóa để tìm kiếm.`);
         
     } catch (error) {
         isLoading = false;
@@ -351,99 +254,42 @@ function render(keyword = "") {
     const kw = keyword.toLowerCase().trim();
     const fragment = document.createDocumentFragment();
     let count = 0;
-    
-    // Counters
-    let okBothCount = 0;
-    let onlyNewCount = 0;
-    let onlyOldCount = 0;
-    let pendingCount = 0;
+    let okCount = 0;
+    let missingCount = 0;
 
-    for (const record of searchArray) {
-        if (!record._search.includes(kw)) continue;
+    for (const data of newData) {
+        if (!data._search.includes(kw)) continue;
 
         const tr = document.createElement("tr");
+        const maKH = data["MÃ KH"];
+        const existed = originalMap[maKH];
         
-        // Xác định trạng thái
-        let statusText = "";
-        let statusClass = "";
-        let rowClass = "";
-
-        const dangKyStatus = record.dangKy.toUpperCase();
-
-        if (record.inNew && record.inOld) {
-            // Có trong cả 2 năm
-            if (dangKyStatus === "OK") {
-                statusText = "✅ Đã tham gia 2025 & 2026 (OK)";
-                statusClass = "status-ok";
-                rowClass = "ok-both";
-                okBothCount++;
-            } else if (dangKyStatus === "CANCEL") {
-                statusText = "⚠️ Đã ký 2025, 2026 Cancel";
-                statusClass = "status-pending";
-                rowClass = "pending-2026";
-                pendingCount++;
-            } else if (dangKyStatus === "CROSS-CHECK") {
-                statusText = "⏳ Đã ký 2025, 2026 Cross-check";
-                statusClass = "status-pending";
-                rowClass = "pending-2026";
-                pendingCount++;
-            } else {
-                // Có data nhưng chưa xác nhận
-                statusText = "⏳ Đã ký 2025, 2026 đang xử lý";
-                statusClass = "status-pending";
-                rowClass = "pending-2026";
-                pendingCount++;
-            }
-        } else if (record.inNew && !record.inOld) {
-            // Chỉ có trong 2026 (khách mới)
-            if (dangKyStatus === "OK") {
-                statusText = "🆕 Mới tham gia 2026 (OK)";
-                statusClass = "status-new";
-                rowClass = "only-2026";
-                onlyNewCount++;
-            } else if (dangKyStatus === "CANCEL") {
-                statusText = "🆕 Mới 2026 nhưng Cancel";
-                statusClass = "status-pending";
-                rowClass = "pending-2026";
-                pendingCount++;
-            } else if (dangKyStatus === "CROSS-CHECK") {
-                statusText = "🆕 Mới 2026, Cross-check";
-                statusClass = "status-pending";
-                rowClass = "pending-2026";
-                pendingCount++;
-            } else {
-                statusText = "🆕 Mới 2026, đang xử lý";
-                statusClass = "status-new";
-                rowClass = "only-2026";
-                onlyNewCount++;
-            }
+        tr.className = existed ? "ok" : "missing";
+        
+        if (existed) {
+            okCount++;
         } else {
-            // Chỉ có trong 2025, chưa đăng ký 2026
-            statusText = "❌ Chỉ có 2025, chưa đăng ký 2026";
-            statusClass = "status-missing";
-            rowClass = "only-2025";
-            onlyOldCount++;
+            missingCount++;
         }
 
-        tr.className = rowClass;
-
-        // Ghi chú
-        const notes = [];
-        if (record.noteHinh) notes.push(record.noteHinh);
-        if (record.thongTinSai) notes.push(record.thongTinSai);
-        const note = notes.join(" | ");
+        const note = [
+            data["NOTE HÌNH ẢNH"] || "",
+            data["THÔNG TIN SAI"] || ""
+        ].filter(n => n).join(" | ");
 
         tr.innerHTML = `
-            <td>${record.maKH}</td>
-            <td>${record.kh}</td>
-            <td>${record.tinh}</td>
-            <td>${record.sdt}</td>
-            <td>${record.tdv}</td>
-            <td>${record.team2025}</td>
-            <td>${record.team2026}</td>
-            <td>${record.dangKy}</td>
+            <td>${data["MÃ KH"] || ""}</td>
+            <td>${data["KH"] || ""}</td>
+            <td>${data["TỈNH"] || ""}</td>
+            <td>${data["SĐT"] || ""}</td>
+            <td>${data["TDV"] || ""}</td>
+            <td>${data["TEAM ĐÃ KÝ 2025"] || ""}</td>
+            <td>${data["TEAM ĐÃ KÝ 2026"] || ""}</td>
+            <td>${data["ĐĂNG KÝ THÀNH CÔNG"] || ""}</td>
             <td>${note}</td>
-            <td class="${statusClass}">${statusText}</td>
+            <td class="${existed ? 'status-ok' : 'status-missing'}">
+                ${existed ? "✅ Đã tham gia" : "❌ Chưa tham gia"}
+            </td>
         `;
 
         fragment.appendChild(tr);
@@ -461,11 +307,9 @@ function render(keyword = "") {
         
         statsDiv.innerHTML = `
             📊 Tìm thấy <strong>${count}</strong> kết quả 
-            | ✅ OK cả 2 năm: <strong>${okBothCount}</strong> 
-            | 🆕 Mới 2026: <strong>${onlyNewCount}</strong>
-            | ❌ Chỉ 2025: <strong>${onlyOldCount}</strong>
-            | ⏳ Pending: <strong>${pendingCount}</strong>
-            ${count >= MAX_RENDER ? ` (Hiển thị tối đa ${MAX_RENDER})` : ''}
+            | ✅ Đã tham gia: <strong>${okCount}</strong> 
+            | ❌ Chưa tham gia: <strong>${missingCount}</strong>
+            ${count >= MAX_RENDER ? ` (Hiển thị tối đa ${MAX_RENDER} kết quả)` : ''}
         `;
         statsDiv.style.display = "block";
     }
