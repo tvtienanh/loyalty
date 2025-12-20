@@ -2,136 +2,337 @@
 <html lang="vi">
 <head>
 <meta charset="UTF-8">
-<title>Tra cứu Loyalty – CT 2026 (Optimized)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tra cứu Loyalty – CT 2026</title>
 
 <style>
-    body { font-family: Arial; padding: 20px; background: #fafafa; }
-    input { width: 420px; padding: 8px; font-size: 14px; }
-    table { border-collapse: collapse; width: 100%; margin-top: 15px; background: #fff; }
-    th, td { border: 1px solid #ccc; padding: 6px; font-size: 13px; }
-    th { background: #f2f2f2; position: sticky; top: 0; }
-    tr.ok { background: #e9ffe9; }
-    tr.missing { background: #ffe9e9; }
+    * { box-sizing: border-box; }
+    body { 
+        font-family: 'Segoe UI', Tahoma, Arial, sans-serif; 
+        padding: 20px; 
+        background: #f5f5f5;
+        margin: 0;
+    }
+    
+    .container {
+        max-width: 1400px;
+        margin: 0 auto;
+        background: white;
+        padding: 30px;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    
+    h2 { 
+        color: #333; 
+        margin-bottom: 20px;
+        font-size: 24px;
+    }
+    
+    .search-box {
+        margin-bottom: 20px;
+    }
+    
+    input { 
+        width: 100%;
+        max-width: 500px;
+        padding: 12px 16px; 
+        font-size: 15px;
+        border: 2px solid #ddd;
+        border-radius: 6px;
+        transition: border-color 0.3s;
+    }
+    
+    input:focus {
+        outline: none;
+        border-color: #4CAF50;
+    }
+    
+    .stats {
+        margin: 15px 0;
+        padding: 12px;
+        background: #e3f2fd;
+        border-radius: 6px;
+        font-size: 14px;
+        color: #1976d2;
+    }
+    
+    .table-wrapper {
+        overflow-x: auto;
+        margin-top: 20px;
+    }
+    
+    table { 
+        border-collapse: collapse; 
+        width: 100%; 
+        background: #fff;
+        font-size: 13px;
+    }
+    
+    th, td { 
+        border: 1px solid #ddd; 
+        padding: 10px 8px;
+        text-align: left;
+    }
+    
+    th { 
+        background: #4CAF50;
+        color: white;
+        font-weight: 600;
+        position: sticky; 
+        top: 0;
+        z-index: 10;
+    }
+    
+    tr.ok { 
+        background: #e8f5e9; 
+    }
+    
+    tr.missing { 
+        background: #ffebee; 
+    }
+    
+    tr:hover {
+        background: #f5f5f5 !important;
+    }
+    
+    .status-ok {
+        color: #2e7d32;
+        font-weight: 600;
+    }
+    
+    .status-missing {
+        color: #c62828;
+        font-weight: 600;
+    }
+    
+    .loading {
+        text-align: center;
+        padding: 40px;
+        color: #666;
+        font-size: 16px;
+    }
+    
+    .no-results {
+        text-align: center;
+        padding: 40px;
+        color: #999;
+        font-style: italic;
+    }
 </style>
 </head>
 
 <body>
 
-<h2>Tra cứu khách hàng Loyalty – Kiểm tra CT 2026</h2>
-<input id="searchInput" placeholder="Nhập Mã KH / KH / SĐT / TDV">
-
-<table>
-<thead>
-<tr>
-    <th>Mã KH</th>
-    <th>Khách hàng</th>
-    <th>Tỉnh</th>
-    <th>SĐT</th>
-    <th>TDV</th>
-    <th>Team ký 2025</th>
-    <th>Team ký 2026</th>
-    <th>Đăng ký thành công</th>
-    <th>Ghi chú</th>
-    <th>Trạng thái 2026</th>
-</tr>
-</thead>
-<tbody id="tbody"></tbody>
-</table>
+<div class="container">
+    <h2>🔍 Tra cứu khách hàng Loyalty – Kiểm tra CT 2026</h2>
+    
+    <div class="search-box">
+        <input 
+            id="searchInput" 
+            placeholder="Nhập Mã KH / Tên khách hàng / SĐT / Tên TDV để tìm kiếm..."
+            autocomplete="off"
+        >
+    </div>
+    
+    <div id="stats" class="stats" style="display:none;"></div>
+    
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th>Mã KH</th>
+                    <th>Khách hàng</th>
+                    <th>Tỉnh</th>
+                    <th>SĐT</th>
+                    <th>TDV</th>
+                    <th>Team ký 2025</th>
+                    <th>Team ký 2026</th>
+                    <th>Đăng ký thành công</th>
+                    <th>Ghi chú</th>
+                    <th>Trạng thái 2026</th>
+                </tr>
+            </thead>
+            <tbody id="tbody">
+                <tr>
+                    <td colspan="10" class="loading">⏳ Đang tải dữ liệu...</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
 
 <script>
-const NEW_URL =
-"https://docs.google.com/spreadsheets/d/14dZ70xuUlYskJHGLfF4dI_lY_V8vsqJfAJ-Dlo_DdrU/gviz/tq?tqx=out:json&sheet=new_data";
+const NEW_URL = "https://docs.google.com/spreadsheets/d/14dZ70xuUlYskJHGLfF4dI_lY_V8vsqJfAJ-Dlo_DdrU/gviz/tq?tqx=out:json&sheet=new_data";
+const OLD_URL = "https://docs.google.com/spreadsheets/d/14dZ70xuUlYskJHGLfF4dI_lY_V8vsqJfAJ-Dlo_DdrU/gviz/tq?tqx=out:json&sheet=original_data";
 
-const OLD_URL =
-"https://docs.google.com/spreadsheets/d/14dZ70xuUlYskJHGLfF4dI_lY_V8vsqJfAJ-Dlo_DdrU/gviz/tq?tqx=out:json&sheet=original_data";
-
-const MAX_RENDER = 300;
+const MAX_RENDER = 500;
 
 let newData = [];
 let originalMap = {};
 let debounceTimer;
+let isLoading = true;
 
-/* ===== CORE ===== */
+/* ===== PARSE GOOGLE VISUALIZATION JSON ===== */
 function parseGViz(text) {
-    return JSON.parse(text.substring(47, text.length - 2));
+    const jsonText = text.substring(47, text.length - 2);
+    return JSON.parse(jsonText);
 }
 
 function rowToObject(cols, row) {
     const obj = {};
-    cols.forEach((c, i) => obj[c.label] = row.c[i]?.v || "");
+    cols.forEach((col, i) => {
+        const value = row.c[i] ? row.c[i].v : "";
+        obj[col.label] = value || "";
+    });
     return obj;
 }
 
 /* ===== LOAD DATA ===== */
-Promise.all([
-    fetch(NEW_URL).then(r => r.text()),
-    fetch(OLD_URL).then(r => r.text())
-]).then(([newText, oldText]) => {
+async function loadData() {
+    try {
+        const [newResponse, oldResponse] = await Promise.all([
+            fetch(NEW_URL),
+            fetch(OLD_URL)
+        ]);
 
-    const newJson = parseGViz(newText);
-    const oldJson = parseGViz(oldText);
+        const newText = await newResponse.text();
+        const oldText = await oldResponse.text();
 
-    newData = newJson.table.rows.map(r => {
-        const o = rowToObject(newJson.table.cols, r);
-        o._search = (
-            (o["MÃ KH"] || "") + " " +
-            (o["KH"] || "") + " " +
-            (o["SĐT"] || "") + " " +
-            (o["TDV"] || "")
-        ).toLowerCase();
-        return o;
-    });
+        const newJson = parseGViz(newText);
+        const oldJson = parseGViz(oldText);
 
-    oldJson.table.rows.forEach(r => {
-        const o = rowToObject(oldJson.table.cols, r);
-        if (o["MÃ KH"]) originalMap[o["MÃ KH"]] = true;
-    });
-});
+        // Process new_data
+        newData = newJson.table.rows.map(row => {
+            const obj = rowToObject(newJson.table.cols, row);
+            
+            // Create search string for faster filtering
+            obj._search = [
+                obj["MÃ KH"] || "",
+                obj["KH"] || "",
+                obj["SĐT"] || "",
+                obj["TDV"] || ""
+            ].join(" ").toLowerCase().trim();
+            
+            return obj;
+        });
 
-/* ===== RENDER ===== */
-function render(keyword = "") {
-    const tbody = document.getElementById("tbody");
-    tbody.innerHTML = "";
+        // Process original_data - create map for quick lookup
+        oldJson.table.rows.forEach(row => {
+            const obj = rowToObject(oldJson.table.cols, row);
+            const maKH = obj["MÃ KH"];
+            if (maKH) {
+                originalMap[maKH] = true;
+            }
+        });
 
-    if (!keyword) return;
-
-    const kw = keyword.toLowerCase();
-    const frag = document.createDocumentFragment();
-    let count = 0;
-
-    for (const d of newData) {
-        if (!d._search.includes(kw)) continue;
-
-        const tr = document.createElement("tr");
-        const existed = originalMap[d["MÃ KH"]];
-        tr.className = existed ? "ok" : "missing";
-
-        tr.innerHTML = `
-            <td>${d["MÃ KH"] || ""}</td>
-            <td>${d["KH"] || ""}</td>
-            <td>${d["TỈNH"] || ""}</td>
-            <td>${d["SĐT"] || ""}</td>
-            <td>${d["TDV"] || ""}</td>
-            <td>${d["TEAM ĐÃ KÝ 2025"] || ""}</td>
-            <td>${d["TEAM ĐÃ KÝ 2026"] || ""}</td>
-            <td>${d["ĐĂNG KÝ THÀNH CÔNG"] || ""}</td>
-            <td>${(d["NOTE HÌNH ẢNH"] || "") + " " + (d["THÔNG TIN SAI"] || "")}</td>
-            <td>${existed ? "✅ Đã tham gia" : "❌ Chưa tham gia"}</td>
-        `;
-
-        frag.appendChild(tr);
-        if (++count >= MAX_RENDER) break;
+        isLoading = false;
+        showMessage(`✅ Đã tải ${newData.length} khách hàng. Hãy nhập từ khóa để tìm kiếm.`);
+        
+    } catch (error) {
+        isLoading = false;
+        showMessage("❌ Lỗi khi tải dữ liệu. Vui lòng thử lại sau.");
+        console.error("Load error:", error);
     }
-
-    tbody.appendChild(frag);
 }
 
-/* ===== SEARCH (DEBOUNCE) ===== */
+/* ===== RENDER TABLE ===== */
+function render(keyword = "") {
+    const tbody = document.getElementById("tbody");
+    const statsDiv = document.getElementById("stats");
+    
+    if (isLoading) {
+        return;
+    }
+
+    if (!keyword.trim()) {
+        tbody.innerHTML = '<tr><td colspan="10" class="no-results">👆 Nhập từ khóa để bắt đầu tìm kiếm</td></tr>';
+        statsDiv.style.display = "none";
+        return;
+    }
+
+    const kw = keyword.toLowerCase().trim();
+    const fragment = document.createDocumentFragment();
+    let count = 0;
+    let okCount = 0;
+    let missingCount = 0;
+
+    for (const data of newData) {
+        if (!data._search.includes(kw)) continue;
+
+        const tr = document.createElement("tr");
+        const maKH = data["MÃ KH"];
+        const existed = originalMap[maKH];
+        
+        tr.className = existed ? "ok" : "missing";
+        
+        if (existed) {
+            okCount++;
+        } else {
+            missingCount++;
+        }
+
+        const note = [
+            data["NOTE HÌNH ẢNH"] || "",
+            data["THÔNG TIN SAI"] || ""
+        ].filter(n => n).join(" | ");
+
+        tr.innerHTML = `
+            <td>${data["MÃ KH"] || ""}</td>
+            <td>${data["KH"] || ""}</td>
+            <td>${data["TỈNH"] || ""}</td>
+            <td>${data["SĐT"] || ""}</td>
+            <td>${data["TDV"] || ""}</td>
+            <td>${data["TEAM ĐÃ KÝ 2025"] || ""}</td>
+            <td>${data["TEAM ĐÃ KÝ 2026"] || ""}</td>
+            <td>${data["ĐĂNG KÝ THÀNH CÔNG"] || ""}</td>
+            <td>${note}</td>
+            <td class="${existed ? 'status-ok' : 'status-missing'}">
+                ${existed ? "✅ Đã tham gia" : "❌ Chưa tham gia"}
+            </td>
+        `;
+
+        fragment.appendChild(tr);
+        count++;
+        
+        if (count >= MAX_RENDER) break;
+    }
+
+    if (count === 0) {
+        tbody.innerHTML = '<tr><td colspan="10" class="no-results">🔍 Không tìm thấy kết quả phù hợp</td></tr>';
+        statsDiv.style.display = "none";
+    } else {
+        tbody.innerHTML = "";
+        tbody.appendChild(fragment);
+        
+        statsDiv.innerHTML = `
+            📊 Tìm thấy <strong>${count}</strong> kết quả 
+            | ✅ Đã tham gia: <strong>${okCount}</strong> 
+            | ❌ Chưa tham gia: <strong>${missingCount}</strong>
+            ${count >= MAX_RENDER ? ` (Hiển thị tối đa ${MAX_RENDER} kết quả)` : ''}
+        `;
+        statsDiv.style.display = "block";
+    }
+}
+
+/* ===== SHOW MESSAGE ===== */
+function showMessage(msg) {
+    const tbody = document.getElementById("tbody");
+    tbody.innerHTML = `<tr><td colspan="10" class="loading">${msg}</td></tr>`;
+}
+
+/* ===== SEARCH WITH DEBOUNCE ===== */
 document.getElementById("searchInput").addEventListener("input", e => {
     clearTimeout(debounceTimer);
     const value = e.target.value;
-    debounceTimer = setTimeout(() => render(value), 200);
+    debounceTimer = setTimeout(() => render(value), 250);
 });
+
+// Auto focus on search input
+document.getElementById("searchInput").focus();
+
+// Load data on page load
+loadData();
 </script>
 
 </body>
