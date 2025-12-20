@@ -168,7 +168,8 @@ const OLD_URL = "https://docs.google.com/spreadsheets/d/14dZ70xuUlYskJHGLfF4dI_l
 
 const MAX_RENDER = 500;
 
-let allData = []; // Combined data from both sheets
+let allData = []; // Chứa tất cả data từ cả 2 sheets
+let newDataSet = new Set(); // Set chứa Mã KH từ new_data
 let debounceTimer;
 let isLoading = true;
 
@@ -181,8 +182,14 @@ function parseGViz(text) {
 function rowToObject(cols, row) {
     const obj = {};
     cols.forEach((col, i) => {
-        const value = row.c[i] ? row.c[i].v : "";
-        obj[col.label] = value || "";
+        const cellValue = row.c[i];
+        let value = "";
+        
+        if (cellValue !== null && cellValue !== undefined) {
+            value = cellValue.v !== null && cellValue.v !== undefined ? cellValue.v : "";
+        }
+        
+        obj[col.label] = value;
     });
     return obj;
 }
@@ -201,91 +208,61 @@ async function loadData() {
         const newJson = parseGViz(newText);
         const oldJson = parseGViz(oldText);
 
-        // Create map for quick lookup of new_data
-        const newDataMap = {};
-        newJson.table.rows.forEach(row => {
+        // Process new_data
+        const newDataArray = newJson.table.rows.map(row => {
             const obj = rowToObject(newJson.table.cols, row);
-            const maKH = String(obj["MÃ KH"] || "").trim();
-            if (maKH) {
-                newDataMap[maKH] = obj;
-            }
-        });
-
-        // Create map for quick lookup of original_data
-        const oldDataMap = {};
-        oldJson.table.rows.forEach(row => {
-            const obj = rowToObject(oldJson.table.cols, row);
-            const maKH = String(obj["MÃ KH"] || "").trim();
-            if (maKH) {
-                oldDataMap[maKH] = obj;
-            }
-        });
-
-        // Combine data: prioritize new_data, but include customers only in original_data
-        const allMaKH = new Set([...Object.keys(newDataMap), ...Object.keys(oldDataMap)]);
-        
-        allData = Array.from(allMaKH).map(maKH => {
-            const inNew = newDataMap[maKH];
-            const inOld = oldDataMap[maKH];
             
-            // If customer is in new_data, use that data
-            if (inNew) {
-                const data = {
-                    maKH: maKH,
-                    khachHang: inNew["KH"] || "",
-                    tinh: inNew["Tỉnh"] || "",
-                    sdt: String(inNew["Số điện thoại di động"] || ""),
-                    tdv: inNew["TDV"] || "",
-                    teamKy2025: inNew["TEAM ĐÃ KÝ 2025"] || "",
-                    teamKy2026: inNew["TEAM KÝ 2026"] || "",
-                    dangKyThanhCong: inNew["Đăng ký thành công"] || "",
-                    noteHinhAnh: inNew["Note hình ảnh"] || "",
-                    thongTinSai: inNew["Thông tin sai/thiếu (nếu có)"] || "",
-                    inNew: true,
-                    inOld: !!inOld
-                };
-                
-                // Create search string
-                data._search = [
-                    data.maKH,
-                    data.khachHang,
-                    data.sdt,
-                    data.tdv
-                ].join(" ").toLowerCase().trim();
-                
-                return data;
-            } 
-            // If customer is only in original_data
-            else if (inOld) {
-                const data = {
-                    maKH: maKH,
-                    khachHang: inOld["KH"] || "",
-                    tinh: inOld["Tỉnh"] || "",
-                    sdt: String(inOld["Số điện thoại di động"] || ""),
-                    tdv: inOld["TDV"] || "",
-                    teamKy2025: inOld["TEAM ĐÃ KÝ 2025"] || "",
-                    teamKy2026: "",
-                    dangKyThanhCong: "",
-                    noteHinhAnh: "",
-                    thongTinSai: "",
-                    inNew: false,
-                    inOld: true
-                };
-                
-                // Create search string
-                data._search = [
-                    data.maKH,
-                    data.khachHang,
-                    data.sdt,
-                    data.tdv
-                ].join(" ").toLowerCase().trim();
-                
-                return data;
+            // Chuẩn hóa số điện thoại
+            const sdt = obj["Số điện thoại di động"] ? String(obj["Số điện thoại di động"]) : "";
+            
+            obj._search = [
+                obj["MÃ KH"] || "",
+                obj["KH"] || "",
+                sdt,
+                obj["TDV"] || ""
+            ].join(" ").toLowerCase().trim();
+            
+            obj._isNew = true; // Đánh dấu đây là data từ new_data
+            
+            const maKH = obj["MÃ KH"] ? String(obj["MÃ KH"]) : "";
+            if (maKH) {
+                newDataSet.add(maKH);
             }
-        }).filter(item => item); // Remove any null/undefined entries
+            
+            return obj;
+        });
+
+        // Process original_data
+        const oldDataArray = oldJson.table.rows.map(row => {
+            const obj = rowToObject(oldJson.table.cols, row);
+            
+            const sdt = obj["Số điện thoại di động"] ? String(obj["Số điện thoại di động"]) : "";
+            
+            obj._search = [
+                obj["MÃ KH"] || "",
+                obj["KH"] || "",
+                sdt,
+                obj["TDV"] || ""
+            ].join(" ").toLowerCase().trim();
+            
+            obj._isNew = false; // Đánh dấu đây là data từ original_data
+            
+            return obj;
+        });
+
+        // Merge data: new_data + original_data (không trùng lặp)
+        allData = [...newDataArray];
+        
+        // Thêm các khách hàng từ original_data mà không có trong new_data
+        oldDataArray.forEach(oldItem => {
+            const maKH = oldItem["MÃ KH"] ? String(oldItem["MÃ KH"]) : "";
+            if (!newDataSet.has(maKH)) {
+                allData.push(oldItem);
+            }
+        });
 
         isLoading = false;
-        showMessage(`✅ Đã tải ${allData.length} khách hàng. Hãy nhập từ khóa để tìm kiếm.`);
+        showMessage(`✅ Đã tải ${allData.length} khách hàng (${newDataArray.length} mới + ${allData.length - newDataArray.length} cũ). Hãy nhập từ khóa để tìm kiếm.`);
         
     } catch (error) {
         isLoading = false;
@@ -319,35 +296,41 @@ function render(keyword = "") {
         if (!data._search.includes(kw)) continue;
 
         const tr = document.createElement("tr");
+        const maKH = data["MÃ KH"] ? String(data["MÃ KH"]) : "";
+        const isIn2026 = data._isNew; // Có trong new_data = đã tham gia 2026
         
-        // Determine status: in new_data = participating in 2026
-        const participating2026 = data.inNew;
+        tr.className = isIn2026 ? "ok" : "missing";
         
-        tr.className = participating2026 ? "ok" : "missing";
-        
-        if (participating2026) {
+        if (isIn2026) {
             okCount++;
         } else {
             missingCount++;
         }
 
-        // Combine notes
-        const note = [data.noteHinhAnh, data.thongTinSai]
-            .filter(n => n)
-            .join(" | ");
+        // Lấy các trường dữ liệu
+        const teamKy2025 = data["TEAM ĐÃ KÝ 2025"] || "";
+        const teamKy2026 = data["TEAM KÝ 2026"] || "";
+        const dangKyThanhCong = data["Đăng ký thành công"] || "";
+        
+        // Ghi chú: kết hợp Note hình ảnh và Thông tin sai
+        const noteHinhAnh = data["Note hình ảnh"] || "";
+        const thongTinSai = data["Thông tin sai/thiếu (nếu có)"] || "";
+        const note = [noteHinhAnh, thongTinSai].filter(n => n).join(" | ");
+
+        const sdt = data["Số điện thoại di động"] ? String(data["Số điện thoại di động"]) : "";
 
         tr.innerHTML = `
-            <td>${data.maKH}</td>
-            <td>${data.khachHang}</td>
-            <td>${data.tinh}</td>
-            <td>${data.sdt}</td>
-            <td>${data.tdv}</td>
-            <td>${data.teamKy2025}</td>
-            <td>${data.teamKy2026}</td>
-            <td>${data.dangKyThanhCong}</td>
+            <td>${maKH}</td>
+            <td>${data["KH"] || ""}</td>
+            <td>${data["Tỉnh"] || ""}</td>
+            <td>${sdt}</td>
+            <td>${data["TDV"] || ""}</td>
+            <td>${teamKy2025}</td>
+            <td>${teamKy2026}</td>
+            <td>${dangKyThanhCong}</td>
             <td>${note}</td>
-            <td class="${participating2026 ? 'status-ok' : 'status-missing'}">
-                ${participating2026 ? "✅ Đã tham gia 2026" : "❌ Chưa tham gia 2026"}
+            <td class="${isIn2026 ? 'status-ok' : 'status-missing'}">
+                ${isIn2026 ? "✅ Đã tham gia" : "❌ Chưa tham gia"}
             </td>
         `;
 
@@ -366,8 +349,8 @@ function render(keyword = "") {
         
         statsDiv.innerHTML = `
             📊 Tìm thấy <strong>${count}</strong> kết quả 
-            | ✅ Đã tham gia 2026: <strong>${okCount}</strong> 
-            | ❌ Chưa tham gia 2026: <strong>${missingCount}</strong>
+            | ✅ Đã tham gia: <strong>${okCount}</strong> 
+            | ❌ Chưa tham gia: <strong>${missingCount}</strong>
             ${count >= MAX_RENDER ? ` (Hiển thị tối đa ${MAX_RENDER} kết quả)` : ''}
         `;
         statsDiv.style.display = "block";
