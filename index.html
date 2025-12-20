@@ -84,34 +84,43 @@
         z-index: 10;
     }
     
-    tr.in-both { 
+    tr.ok-both { 
         background: #e8f5e9; 
     }
     
-    tr.only-new { 
+    tr.only-2026 { 
         background: #fff3e0; 
     }
     
-    tr.only-old { 
+    tr.only-2025 { 
         background: #ffebee; 
     }
     
-    tr:hover {
-        opacity: 0.8;
+    tr.pending-2026 {
+        background: #fff9c4;
     }
     
-    .status-in-both {
+    tr:hover {
+        opacity: 0.85;
+    }
+    
+    .status-ok {
         color: #2e7d32;
         font-weight: 600;
     }
     
-    .status-only-new {
+    .status-new {
         color: #f57c00;
         font-weight: 600;
     }
     
-    .status-only-old {
+    .status-missing {
         color: #c62828;
+        font-weight: 600;
+    }
+    
+    .status-pending {
+        color: #f9a825;
         font-weight: 600;
     }
     
@@ -175,10 +184,14 @@
 const NEW_URL = "https://docs.google.com/spreadsheets/d/14dZ70xuUlYskJHGLfF4dI_lY_V8vsqJfAJ-Dlo_DdrU/gviz/tq?tqx=out:json&sheet=new_data";
 const OLD_URL = "https://docs.google.com/spreadsheets/d/14dZ70xuUlYskJHGLfF4dI_lY_V8vsqJfAJ-Dlo_DdrU/gviz/tq?tqx=out:json&sheet=original_data";
 
-const MAX_RENDER = 500;
+const MAX_RENDER = 1000;
 
-let allData = {}; // Key: Mã KH, Value: merged record
-let dataArray = []; // Array for search
+// Lưu riêng biệt, KHÔNG merge
+let newDataMap = {};      // Key: Mã KH, Value: full record from new_data
+let oldDataMap = {};      // Key: Mã KH, Value: full record from original_data
+let allMaKH = new Set();  // Tất cả Mã KH từ cả 2 nguồn
+let searchArray = [];     // Array để search
+
 let debounceTimer;
 let isLoading = true;
 
@@ -225,91 +238,58 @@ async function loadData() {
         console.log("New data columns:", newJson.table.cols.map(c => c.label));
         console.log("Old data columns:", oldJson.table.cols.map(c => c.label));
 
-        // Step 1: Load original_data first (baseline)
-        oldJson.table.rows.forEach(row => {
-            const obj = rowToObject(oldJson.table.cols, row);
-            const maKH = (obj["MÃ KH"] || "").trim();
-            
-            if (maKH) {
-                allData[maKH] = {
-                    maKH: maKH,
-                    kh: obj["KH"] || "",
-                    tinh: "",
-                    sdt: obj["SĐT"] || "",
-                    tdv: obj["TDV"] || "",
-                    team2025: obj["TEAM"] || "",
-                    team2026: "",
-                    dangKy: "",
-                    noteHinh: "",
-                    thongTinSai: "",
-                    inOld: true,
-                    inNew: false
-                };
-            }
-        });
-
-        console.log("After loading original_data:", Object.keys(allData).length, "records");
-
-        // Step 2: Overlay new_data (update or add)
+        // Load new_data - GIỮ NGUYÊN, KHÔNG MERGE
+        console.log("Loading new_data...");
         newJson.table.rows.forEach(row => {
             const obj = rowToObject(newJson.table.cols, row);
-            const maKH = (obj["MÃ KH"] || "").trim();
+            const maKH = obj["MÃ KH"];
             
             if (maKH) {
-                if (allData[maKH]) {
-                    // Update existing record from original
-                    allData[maKH].kh = obj["KH"] || allData[maKH].kh;
-                    allData[maKH].tinh = obj["TỈNH"] || "";
-                    allData[maKH].sdt = obj["SĐT"] || allData[maKH].sdt;
-                    allData[maKH].tdv = obj["TDV"] || allData[maKH].tdv;
-                    allData[maKH].team2025 = obj["TEAM ĐÃ KÝ 2025"] || allData[maKH].team2025;
-                    allData[maKH].team2026 = obj["TEAM ĐÃ KÝ 2026"] || "";
-                    allData[maKH].dangKy = obj["ĐĂNG KÝ THÀNH CÔNG"] || "";
-                    allData[maKH].noteHinh = obj["NOTE HÌNH ẢNH"] || "";
-                    allData[maKH].thongTinSai = obj["THÔNG TIN SAI"] || "";
-                    allData[maKH].inNew = true;
-                } else {
-                    // New customer, not in original
-                    allData[maKH] = {
-                        maKH: maKH,
-                        kh: obj["KH"] || "",
-                        tinh: obj["TỈNH"] || "",
-                        sdt: obj["SĐT"] || "",
-                        tdv: obj["TDV"] || "",
-                        team2025: obj["TEAM ĐÃ KÝ 2025"] || "",
-                        team2026: obj["TEAM ĐÃ KÝ 2026"] || "",
-                        dangKy: obj["ĐĂNG KÝ THÀNH CÔNG"] || "",
-                        noteHinh: obj["NOTE HÌNH ẢNH"] || "",
-                        thongTinSai: obj["THÔNG TIN SAI"] || "",
-                        inOld: false,
-                        inNew: true
-                    };
-                }
+                newDataMap[maKH] = obj;
+                allMaKH.add(maKH);
             }
         });
 
-        console.log("After merging with new_data:", Object.keys(allData).length, "records");
+        console.log("new_data loaded:", Object.keys(newDataMap).length, "records");
 
-        // Step 3: Determine status and create search array
-        dataArray = [];
-        let inBothCount = 0;
-        let onlyNewCount = 0;
-        let onlyOldCount = 0;
-
-        Object.values(allData).forEach(record => {
-            // Determine status
-            if (record.inOld && record.inNew) {
-                record.status = "in-both";
-                inBothCount++;
-            } else if (record.inNew && !record.inOld) {
-                record.status = "only-new";
-                onlyNewCount++;
-            } else if (record.inOld && !record.inNew) {
-                record.status = "only-old";
-                onlyOldCount++;
+        // Load original_data - GIỮ NGUYÊN, KHÔNG MERGE
+        console.log("Loading original_data...");
+        oldJson.table.rows.forEach(row => {
+            const obj = rowToObject(oldJson.table.cols, row);
+            const maKH = obj["MÃ KH"];
+            
+            if (maKH) {
+                oldDataMap[maKH] = obj;
+                allMaKH.add(maKH);
             }
+        });
 
-            // Create search string
+        console.log("original_data loaded:", Object.keys(oldDataMap).length, "records");
+        console.log("Total unique Mã KH:", allMaKH.size);
+
+        // Tạo search array từ TẤT CẢ Mã KH
+        console.log("Building search array...");
+        searchArray = Array.from(allMaKH).map(maKH => {
+            const newRec = newDataMap[maKH];
+            const oldRec = oldDataMap[maKH];
+
+            // Lấy thông tin từ new_data nếu có, không thì từ old_data
+            const record = {
+                maKH: maKH,
+                kh: (newRec && newRec["KH"]) || (oldRec && oldRec["KH"]) || "",
+                tinh: (newRec && newRec["TỈNH"]) || "",
+                sdt: (newRec && newRec["SĐT"]) || (oldRec && oldRec["SĐT"]) || "",
+                tdv: (newRec && newRec["TDV"]) || (oldRec && oldRec["TDV"]) || "",
+                team2025: (newRec && newRec["TEAM ĐÃ KÝ 2025"]) || (oldRec && oldRec["TEAM"]) || "",
+                team2026: (newRec && newRec["TEAM ĐÃ KÝ 2026"]) || "",
+                dangKy: (newRec && newRec["ĐĂNG KÝ THÀNH CÔNG"]) || "",
+                noteHinh: (newRec && newRec["NOTE HÌNH ẢNH"]) || "",
+                thongTinSai: (newRec && newRec["THÔNG TIN SAI"]) || "",
+                inNew: !!newRec,
+                inOld: !!oldRec
+            };
+
+            // Tạo search string
             const searchFields = [
                 record.maKH,
                 record.kh,
@@ -317,21 +297,34 @@ async function loadData() {
                 record.tdv,
                 record.tinh
             ];
-            record._search = searchFields.join(" ").toLowerCase().trim();
+            record._search = searchFields.join(" ").toLowerCase();
 
-            dataArray.push(record);
+            return record;
         });
 
-        isLoading = false;
-        
+        console.log("Search array built:", searchArray.length, "records");
+
+        // Thống kê
+        const stats = {
+            inBoth: searchArray.filter(r => r.inNew && r.inOld).length,
+            onlyNew: searchArray.filter(r => r.inNew && !r.inOld).length,
+            onlyOld: searchArray.filter(r => !r.inNew && r.inOld).length,
+            ok2026: searchArray.filter(r => r.dangKy === "OK").length,
+            cancel2026: searchArray.filter(r => r.dangKy === "Cancel").length,
+            crosscheck2026: searchArray.filter(r => r.dangKy === "Cross-check").length
+        };
+
         console.log("=== STATISTICS ===");
-        console.log("Total records:", dataArray.length);
-        console.log("✅ In both (2025 & 2026):", inBothCount);
-        console.log("🆕 Only in new (2026 only):", onlyNewCount);
-        console.log("❌ Only in old (2025 only, not in 2026):", onlyOldCount);
-        console.log("Sample data:", dataArray.slice(0, 3));
-        
-        showMessage(`✅ Đã tải ${dataArray.length} khách hàng. Hãy nhập từ khóa để tìm kiếm.`);
+        console.log("Total records:", searchArray.length);
+        console.log("In both 2025 & 2026:", stats.inBoth);
+        console.log("Only in 2026 (new):", stats.onlyNew);
+        console.log("Only in 2025 (not registered 2026):", stats.onlyOld);
+        console.log("2026 status - OK:", stats.ok2026);
+        console.log("2026 status - Cancel:", stats.cancel2026);
+        console.log("2026 status - Cross-check:", stats.crosscheck2026);
+
+        isLoading = false;
+        showMessage(`✅ Đã tải ${searchArray.length} khách hàng (New: ${Object.keys(newDataMap).length}, Old: ${Object.keys(oldDataMap).length}). Hãy nhập từ khóa để tìm kiếm.`);
         
     } catch (error) {
         isLoading = false;
@@ -358,41 +351,87 @@ function render(keyword = "") {
     const kw = keyword.toLowerCase().trim();
     const fragment = document.createDocumentFragment();
     let count = 0;
-    let inBothCount = 0;
+    
+    // Counters
+    let okBothCount = 0;
     let onlyNewCount = 0;
     let onlyOldCount = 0;
+    let pendingCount = 0;
 
-    for (const record of dataArray) {
+    for (const record of searchArray) {
         if (!record._search.includes(kw)) continue;
 
         const tr = document.createElement("tr");
-        tr.className = record.status;
         
-        if (record.status === "in-both") {
-            inBothCount++;
-        } else if (record.status === "only-new") {
-            onlyNewCount++;
+        // Xác định trạng thái
+        let statusText = "";
+        let statusClass = "";
+        let rowClass = "";
+
+        const dangKyStatus = record.dangKy.toUpperCase();
+
+        if (record.inNew && record.inOld) {
+            // Có trong cả 2 năm
+            if (dangKyStatus === "OK") {
+                statusText = "✅ Đã tham gia 2025 & 2026 (OK)";
+                statusClass = "status-ok";
+                rowClass = "ok-both";
+                okBothCount++;
+            } else if (dangKyStatus === "CANCEL") {
+                statusText = "⚠️ Đã ký 2025, 2026 Cancel";
+                statusClass = "status-pending";
+                rowClass = "pending-2026";
+                pendingCount++;
+            } else if (dangKyStatus === "CROSS-CHECK") {
+                statusText = "⏳ Đã ký 2025, 2026 Cross-check";
+                statusClass = "status-pending";
+                rowClass = "pending-2026";
+                pendingCount++;
+            } else {
+                // Có data nhưng chưa xác nhận
+                statusText = "⏳ Đã ký 2025, 2026 đang xử lý";
+                statusClass = "status-pending";
+                rowClass = "pending-2026";
+                pendingCount++;
+            }
+        } else if (record.inNew && !record.inOld) {
+            // Chỉ có trong 2026 (khách mới)
+            if (dangKyStatus === "OK") {
+                statusText = "🆕 Mới tham gia 2026 (OK)";
+                statusClass = "status-new";
+                rowClass = "only-2026";
+                onlyNewCount++;
+            } else if (dangKyStatus === "CANCEL") {
+                statusText = "🆕 Mới 2026 nhưng Cancel";
+                statusClass = "status-pending";
+                rowClass = "pending-2026";
+                pendingCount++;
+            } else if (dangKyStatus === "CROSS-CHECK") {
+                statusText = "🆕 Mới 2026, Cross-check";
+                statusClass = "status-pending";
+                rowClass = "pending-2026";
+                pendingCount++;
+            } else {
+                statusText = "🆕 Mới 2026, đang xử lý";
+                statusClass = "status-new";
+                rowClass = "only-2026";
+                onlyNewCount++;
+            }
         } else {
+            // Chỉ có trong 2025, chưa đăng ký 2026
+            statusText = "❌ Chỉ có 2025, chưa đăng ký 2026";
+            statusClass = "status-missing";
+            rowClass = "only-2025";
             onlyOldCount++;
         }
 
-        const note = [record.noteHinh, record.thongTinSai]
-            .filter(n => n && n.trim())
-            .join(" | ");
+        tr.className = rowClass;
 
-        let statusText = "";
-        let statusClass = "";
-        
-        if (record.status === "in-both") {
-            statusText = "✅ Đã tham gia 2025 & 2026";
-            statusClass = "status-in-both";
-        } else if (record.status === "only-new") {
-            statusText = "🆕 Mới tham gia 2026";
-            statusClass = "status-only-new";
-        } else {
-            statusText = "❌ Chỉ có 2025, chưa đăng ký 2026";
-            statusClass = "status-only-old";
-        }
+        // Ghi chú
+        const notes = [];
+        if (record.noteHinh) notes.push(record.noteHinh);
+        if (record.thongTinSai) notes.push(record.thongTinSai);
+        const note = notes.join(" | ");
 
         tr.innerHTML = `
             <td>${record.maKH}</td>
@@ -422,10 +461,11 @@ function render(keyword = "") {
         
         statsDiv.innerHTML = `
             📊 Tìm thấy <strong>${count}</strong> kết quả 
-            | ✅ Cả 2025 & 2026: <strong>${inBothCount}</strong> 
-            | 🆕 Chỉ 2026: <strong>${onlyNewCount}</strong>
+            | ✅ OK cả 2 năm: <strong>${okBothCount}</strong> 
+            | 🆕 Mới 2026: <strong>${onlyNewCount}</strong>
             | ❌ Chỉ 2025: <strong>${onlyOldCount}</strong>
-            ${count >= MAX_RENDER ? ` (Hiển thị tối đa ${MAX_RENDER} kết quả)` : ''}
+            | ⏳ Pending: <strong>${pendingCount}</strong>
+            ${count >= MAX_RENDER ? ` (Hiển thị tối đa ${MAX_RENDER})` : ''}
         `;
         statsDiv.style.display = "block";
     }
