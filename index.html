@@ -177,7 +177,8 @@ const OLD_URL = "https://docs.google.com/spreadsheets/d/14dZ70xuUlYskJHGLfF4dI_l
 
 const MAX_RENDER = 500;
 
-let mergedData = []; // Merge cả new và old data
+let allData = {}; // Key: Mã KH, Value: merged record
+let dataArray = []; // Array for search
 let debounceTimer;
 let isLoading = true;
 
@@ -220,92 +221,95 @@ async function loadData() {
         const newJson = parseGViz(newText);
         const oldJson = parseGViz(oldText);
 
+        console.log("=== COLUMNS ===");
         console.log("New data columns:", newJson.table.cols.map(c => c.label));
         console.log("Old data columns:", oldJson.table.cols.map(c => c.label));
 
-        // Process new_data into a map
-        const newDataMap = {};
-        newJson.table.rows.forEach(row => {
-            const obj = rowToObject(newJson.table.cols, row);
-            const maKH = (obj["MÃ KH"] || "").trim();
-            if (maKH) {
-                newDataMap[maKH] = {
-                    maKH: maKH,
-                    kh: obj["KH"] || "",
-                    tinh: obj["TỈNH"] || "",
-                    sdt: obj["SĐT"] || "",
-                    tdv: obj["TDV"] || "",
-                    team2025: obj["TEAM ĐÃ KÝ 2025"] || "",
-                    team2026: obj["TEAM ĐÃ KÝ 2026"] || "",
-                    dangKy: obj["ĐĂNG KÝ THÀNH CÔNG"] || "",
-                    noteHinh: obj["NOTE HÌNH ẢNH"] || "",
-                    thongTinSai: obj["THÔNG TIN SAI"] || "",
-                    inNew: true,
-                    inOld: false
-                };
-            }
-        });
-
-        // Process original_data
-        const oldDataMap = {};
+        // Step 1: Load original_data first (baseline)
         oldJson.table.rows.forEach(row => {
             const obj = rowToObject(oldJson.table.cols, row);
             const maKH = (obj["MÃ KH"] || "").trim();
+            
             if (maKH) {
-                oldDataMap[maKH] = {
+                allData[maKH] = {
                     maKH: maKH,
                     kh: obj["KH"] || "",
+                    tinh: "",
                     sdt: obj["SĐT"] || "",
                     tdv: obj["TDV"] || "",
                     team2025: obj["TEAM"] || "",
-                    inOld: true
-                };
-            }
-        });
-
-        // Merge data: combine both sources
-        const allMaKH = new Set([
-            ...Object.keys(newDataMap),
-            ...Object.keys(oldDataMap)
-        ]);
-
-        mergedData = [];
-        allMaKH.forEach(maKH => {
-            const newRecord = newDataMap[maKH];
-            const oldRecord = oldDataMap[maKH];
-
-            if (newRecord && oldRecord) {
-                // Có trong cả 2
-                newRecord.inOld = true;
-                newRecord.status = "in-both";
-                mergedData.push(newRecord);
-            } else if (newRecord) {
-                // Chỉ có trong new (khách hàng mới)
-                newRecord.status = "only-new";
-                mergedData.push(newRecord);
-            } else if (oldRecord) {
-                // Chỉ có trong old (đã tham gia 2025 nhưng chưa đăng ký 2026)
-                const record = {
-                    maKH: oldRecord.maKH,
-                    kh: oldRecord.kh,
-                    tinh: "",
-                    sdt: oldRecord.sdt,
-                    tdv: oldRecord.tdv,
-                    team2025: oldRecord.team2025,
                     team2026: "",
                     dangKy: "",
                     noteHinh: "",
                     thongTinSai: "",
-                    inNew: false,
                     inOld: true,
-                    status: "only-old"
+                    inNew: false
                 };
-                mergedData.push(record);
             }
         });
 
-        // Create search string for each record
-        mergedData.forEach(record => {
+        console.log("After loading original_data:", Object.keys(allData).length, "records");
+
+        // Step 2: Overlay new_data (update or add)
+        newJson.table.rows.forEach(row => {
+            const obj = rowToObject(newJson.table.cols, row);
+            const maKH = (obj["MÃ KH"] || "").trim();
+            
+            if (maKH) {
+                if (allData[maKH]) {
+                    // Update existing record from original
+                    allData[maKH].kh = obj["KH"] || allData[maKH].kh;
+                    allData[maKH].tinh = obj["TỈNH"] || "";
+                    allData[maKH].sdt = obj["SĐT"] || allData[maKH].sdt;
+                    allData[maKH].tdv = obj["TDV"] || allData[maKH].tdv;
+                    allData[maKH].team2025 = obj["TEAM ĐÃ KÝ 2025"] || allData[maKH].team2025;
+                    allData[maKH].team2026 = obj["TEAM ĐÃ KÝ 2026"] || "";
+                    allData[maKH].dangKy = obj["ĐĂNG KÝ THÀNH CÔNG"] || "";
+                    allData[maKH].noteHinh = obj["NOTE HÌNH ẢNH"] || "";
+                    allData[maKH].thongTinSai = obj["THÔNG TIN SAI"] || "";
+                    allData[maKH].inNew = true;
+                } else {
+                    // New customer, not in original
+                    allData[maKH] = {
+                        maKH: maKH,
+                        kh: obj["KH"] || "",
+                        tinh: obj["TỈNH"] || "",
+                        sdt: obj["SĐT"] || "",
+                        tdv: obj["TDV"] || "",
+                        team2025: obj["TEAM ĐÃ KÝ 2025"] || "",
+                        team2026: obj["TEAM ĐÃ KÝ 2026"] || "",
+                        dangKy: obj["ĐĂNG KÝ THÀNH CÔNG"] || "",
+                        noteHinh: obj["NOTE HÌNH ẢNH"] || "",
+                        thongTinSai: obj["THÔNG TIN SAI"] || "",
+                        inOld: false,
+                        inNew: true
+                    };
+                }
+            }
+        });
+
+        console.log("After merging with new_data:", Object.keys(allData).length, "records");
+
+        // Step 3: Determine status and create search array
+        dataArray = [];
+        let inBothCount = 0;
+        let onlyNewCount = 0;
+        let onlyOldCount = 0;
+
+        Object.values(allData).forEach(record => {
+            // Determine status
+            if (record.inOld && record.inNew) {
+                record.status = "in-both";
+                inBothCount++;
+            } else if (record.inNew && !record.inOld) {
+                record.status = "only-new";
+                onlyNewCount++;
+            } else if (record.inOld && !record.inNew) {
+                record.status = "only-old";
+                onlyOldCount++;
+            }
+
+            // Create search string
             const searchFields = [
                 record.maKH,
                 record.kh,
@@ -314,17 +318,20 @@ async function loadData() {
                 record.tinh
             ];
             record._search = searchFields.join(" ").toLowerCase().trim();
+
+            dataArray.push(record);
         });
 
         isLoading = false;
         
-        console.log("Sample merged data:", mergedData.slice(0, 3));
-        console.log("Total records:", mergedData.length);
-        console.log("In both:", mergedData.filter(r => r.status === "in-both").length);
-        console.log("Only new:", mergedData.filter(r => r.status === "only-new").length);
-        console.log("Only old:", mergedData.filter(r => r.status === "only-old").length);
+        console.log("=== STATISTICS ===");
+        console.log("Total records:", dataArray.length);
+        console.log("✅ In both (2025 & 2026):", inBothCount);
+        console.log("🆕 Only in new (2026 only):", onlyNewCount);
+        console.log("❌ Only in old (2025 only, not in 2026):", onlyOldCount);
+        console.log("Sample data:", dataArray.slice(0, 3));
         
-        showMessage(`✅ Đã tải ${mergedData.length} khách hàng (${Object.keys(newDataMap).length} new + ${Object.keys(oldDataMap).length} old). Hãy nhập từ khóa để tìm kiếm.`);
+        showMessage(`✅ Đã tải ${dataArray.length} khách hàng. Hãy nhập từ khóa để tìm kiếm.`);
         
     } catch (error) {
         isLoading = false;
@@ -355,7 +362,7 @@ function render(keyword = "") {
     let onlyNewCount = 0;
     let onlyOldCount = 0;
 
-    for (const record of mergedData) {
+    for (const record of dataArray) {
         if (!record._search.includes(kw)) continue;
 
         const tr = document.createElement("tr");
