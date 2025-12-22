@@ -254,6 +254,24 @@ function createUniqueKey(kh, sdt) {
     return `${khNorm}|${sdtNorm}`;
 }
 
+/* ===== PARSE DATETIME FROM NGAY COLUMN ===== */
+function parseNgayColumn(ngayStr) {
+    if (!ngayStr) return null;
+    try {
+        // Format: 2025-12-18 16:00:02.653
+        const str = normalizeValue(ngayStr);
+        if (!str) return null;
+        
+        // Parse datetime string
+        const date = new Date(str);
+        if (isNaN(date.getTime())) return null;
+        
+        return date;
+    } catch (e) {
+        return null;
+    }
+}
+
 /* ===== CHECK CUSTOMER STATUS IN 2026 ===== */
 function getCustomerStatus(data) {
     // Nếu data từ bc_loyalty sheet
@@ -333,35 +351,56 @@ async function loadData() {
             const sdt = normalizeValue(obj["Số điện thoại di động"]);
             const kh = normalizeValue(obj["KH"]);
             const tdv = normalizeValue(obj["TDV"]);
+            const ngay = normalizeValue(obj["NGAY"]);
             
             obj._search = [maKH, kh, sdt, tdv].join(" ").toLowerCase();
             obj._isNew = false;
             obj._isUpdate = true; // Đánh dấu là từ bc_loyalty
             obj._uniqueKey = createUniqueKey(kh, sdt);
+            obj._ngayDate = parseNgayColumn(ngay); // Parse date for sorting
             
             updateDataArray.push(obj);
         });
 
         // Merge và loại bỏ trùng lặp dựa trên KH + SĐT
-        // Ưu tiên: update data (bc_loyalty) > new_data > original_data
+        // Ưu tiên: new_data > bc_loyalty > original_data
+        // Với bc_loyalty: nếu có nhiều bản ghi cùng KH+SĐT, lấy bản đăng ký sớm nhất (NGAY nhỏ nhất)
         const dataMap = new Map();
         
-        // Thêm old data trước
+        // Thêm old data trước (ưu tiên thấp nhất)
         oldDataArray.forEach(item => {
             if (item._uniqueKey) {
                 dataMap.set(item._uniqueKey, item);
             }
         });
         
-        // Thêm new data sau (sẽ ghi đè nếu trùng)
-        newDataArray.forEach(item => {
+        // Thêm update data (bc_loyalty) - ưu tiên trung bình
+        // Nếu có nhiều bản ghi cùng uniqueKey, chỉ lấy bản có NGAY sớm nhất
+        updateDataArray.forEach(item => {
             if (item._uniqueKey) {
-                dataMap.set(item._uniqueKey, item);
+                const existing = dataMap.get(item._uniqueKey);
+                
+                // Nếu chưa có hoặc existing không phải từ bc_loyalty, thêm vào
+                if (!existing || !existing._isUpdate) {
+                    dataMap.set(item._uniqueKey, item);
+                } else {
+                    // Cả hai đều từ bc_loyalty, so sánh ngày
+                    if (item._ngayDate && existing._ngayDate) {
+                        // Lấy bản có ngày sớm hơn
+                        if (item._ngayDate < existing._ngayDate) {
+                            dataMap.set(item._uniqueKey, item);
+                        }
+                    } else if (item._ngayDate && !existing._ngayDate) {
+                        // Item có ngày, existing không có, ưu tiên item
+                        dataMap.set(item._uniqueKey, item);
+                    }
+                    // Nếu existing có ngày mà item không có, giữ existing
+                }
             }
         });
         
-        // Thêm update data cuối cùng (ưu tiên cao nhất)
-        updateDataArray.forEach(item => {
+        // Thêm new data cuối cùng (ưu tiên cao nhất - sẽ ghi đè mọi thứ)
+        newDataArray.forEach(item => {
             if (item._uniqueKey) {
                 dataMap.set(item._uniqueKey, item);
             }
@@ -373,9 +412,10 @@ async function loadData() {
         console.log("Total raw data:", totalRaw);
         console.log("Unique data after deduplication:", uniqueData.length);
         console.log("Duplicates removed:", totalRaw - uniqueData.length);
+        console.log("Priority order: new_data > bc_loyalty (earliest NGAY) > original_data");
 
         isLoading = false;
-        showMessage(`✅ Đã tải ${uniqueData.length} khách hàng duy nhất (từ ${newDataArray.length} new + ${oldDataArray.length} old + ${updateDataArray.length} update, đã loại bỏ ${totalRaw - uniqueData.length} bản ghi trùng). Hãy nhập từ khóa để tìm kiếm.`);
+        showMessage(`✅ Đã tải ${uniqueData.length} khách hàng duy nhất (từ ${newDataArray.length} new + ${updateDataArray.length} update + ${oldDataArray.length} old, đã loại bỏ ${totalRaw - uniqueData.length} bản ghi trùng). Ưu tiên: new_data > bc_loyalty (đăng ký sớm nhất) > original_data. Hãy nhập từ khóa để tìm kiếm.`);
         
     } catch (error) {
         isLoading = false;
