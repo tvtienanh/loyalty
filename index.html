@@ -110,6 +110,10 @@
         background: #ffebee; 
     }
     
+    tr.pending {
+        background: #fff9c4;
+    }
+    
     tr:hover {
         background: #f5f5f5 !important;
     }
@@ -121,6 +125,11 @@
     
     .status-missing {
         color: #c62828;
+        font-weight: 600;
+    }
+    
+    .status-pending {
+        color: #f57c00;
         font-weight: 600;
     }
     
@@ -165,6 +174,9 @@
         <label>
             <input type="radio" name="statusFilter" value="missing"> ❌ Chưa tham gia
         </label>
+        <label>
+            <input type="radio" name="statusFilter" value="pending"> ❓ Đã upload chưa kiểm tra
+        </label>
     </div>
     
     <div id="stats" class="stats" style="display:none;"></div>
@@ -197,11 +209,12 @@
 <script>
 const NEW_URL = "https://docs.google.com/spreadsheets/d/14dZ70xuUlYskJHGLfF4dI_lY_V8vsqJfAJ-Dlo_DdrU/gviz/tq?tqx=out:json&sheet=new_data&tq=select%20*%20limit%2020000";
 const OLD_URL = "https://docs.google.com/spreadsheets/d/14dZ70xuUlYskJHGLfF4dI_lY_V8vsqJfAJ-Dlo_DdrU/gviz/tq?tqx=out:json&sheet=original_data&tq=select%20*%20limit%2020000";
+const UPDATE_URL = "https://docs.google.com/spreadsheets/d/14dZ70xuUlYskJHGLfF4dI_lY_V8vsqJfAJ-Dlo_DdrU/gviz/tq?tqx=out:json&sheet=bc_loyalty&tq=select%20*%20limit%2020000";
 
 const MAX_RENDER = 10000;
 
 let allData = [];
-let uniqueData = []; // Data sau khi loại bỏ trùng lặp
+let uniqueData = [];
 let debounceTimer;
 let isLoading = true;
 let currentFilter = 'all';
@@ -236,48 +249,58 @@ function rowToObject(cols, row) {
 
 /* ===== CREATE UNIQUE KEY FOR DEDUPLICATION ===== */
 function createUniqueKey(kh, sdt) {
-    // Tạo key duy nhất từ KH + SĐT (lowercase, loại bỏ khoảng trắng)
     const khNorm = normalizeValue(kh).toLowerCase().replace(/\s+/g, '');
     const sdtNorm = normalizeValue(sdt).replace(/\s+/g, '');
     return `${khNorm}|${sdtNorm}`;
 }
 
-/* ===== CHECK IF CUSTOMER SUCCESSFULLY REGISTERED IN 2026 ===== */
-function isSuccessfullyRegistered(data) {
+/* ===== CHECK CUSTOMER STATUS IN 2026 ===== */
+function getCustomerStatus(data) {
+    // Nếu data từ bc_loyalty sheet
+    if (data._isUpdate) {
+        return "pending"; // ❓Đã upload chưa kiểm tra
+    }
+    
+    // Nếu từ new_data hoặc original_data
     const dangKy = normalizeValue(data["Đăng ký thành công"]).toUpperCase();
-    return dangKy === "OK";
+    return dangKy === "OK" ? "ok" : "missing";
 }
 
 /* ===== LOAD DATA ===== */
 async function loadData() {
     try {
-        const [newResponse, oldResponse] = await Promise.all([
+        const [newResponse, oldResponse, updateResponse] = await Promise.all([
             fetch(NEW_URL),
-            fetch(OLD_URL)
+            fetch(OLD_URL),
+            fetch(UPDATE_URL)
         ]);
 
         const newText = await newResponse.text();
         const oldText = await oldResponse.text();
+        const updateText = await updateResponse.text();
 
         const newJson = parseGViz(newText);
         const oldJson = parseGViz(oldText);
+        const updateJson = parseGViz(updateText);
 
         console.log("=== DEBUG INFO ===");
         console.log("New data rows:", newJson.table.rows.length);
         console.log("Old data rows:", oldJson.table.rows.length);
+        console.log("Update data rows:", updateJson.table.rows.length);
 
         // Process new_data
         const newDataArray = [];
         newJson.table.rows.forEach(row => {
             const obj = rowToObject(newJson.table.cols, row);
             
-            const maKH = normalizeValue(obj["MÃ KH"]);
+            const maKH = normalizeValue(obj["Mã KH"]);
             const sdt = normalizeValue(obj["Số điện thoại di động"]);
             const kh = normalizeValue(obj["KH"]);
             const tdv = normalizeValue(obj["TDV"]);
             
             obj._search = [maKH, kh, sdt, tdv].join(" ").toLowerCase();
             obj._isNew = true;
+            obj._isUpdate = false;
             obj._uniqueKey = createUniqueKey(kh, sdt);
             
             newDataArray.push(obj);
@@ -288,20 +311,39 @@ async function loadData() {
         oldJson.table.rows.forEach(row => {
             const obj = rowToObject(oldJson.table.cols, row);
             
-            const maKH = normalizeValue(obj["MÃ KH"]);
+            const maKH = normalizeValue(obj["Mã KH"]);
             const sdt = normalizeValue(obj["Số điện thoại di động"]);
             const kh = normalizeValue(obj["KH"]);
             const tdv = normalizeValue(obj["TDV"]);
             
             obj._search = [maKH, kh, sdt, tdv].join(" ").toLowerCase();
             obj._isNew = false;
+            obj._isUpdate = false;
             obj._uniqueKey = createUniqueKey(kh, sdt);
             
             oldDataArray.push(obj);
         });
 
+        // Process bc_loyalty (update data)
+        const updateDataArray = [];
+        updateJson.table.rows.forEach(row => {
+            const obj = rowToObject(updateJson.table.cols, row);
+            
+            const maKH = normalizeValue(obj["Mã KH"]);
+            const sdt = normalizeValue(obj["Số điện thoại di động"]);
+            const kh = normalizeValue(obj["KH"]);
+            const tdv = normalizeValue(obj["TDV"]);
+            
+            obj._search = [maKH, kh, sdt, tdv].join(" ").toLowerCase();
+            obj._isNew = false;
+            obj._isUpdate = true; // Đánh dấu là từ bc_loyalty
+            obj._uniqueKey = createUniqueKey(kh, sdt);
+            
+            updateDataArray.push(obj);
+        });
+
         // Merge và loại bỏ trùng lặp dựa trên KH + SĐT
-        // Ưu tiên data từ new_data (có thông tin mới nhất)
+        // Ưu tiên: update data (bc_loyalty) > new_data > original_data
         const dataMap = new Map();
         
         // Thêm old data trước
@@ -318,14 +360,22 @@ async function loadData() {
             }
         });
         
+        // Thêm update data cuối cùng (ưu tiên cao nhất)
+        updateDataArray.forEach(item => {
+            if (item._uniqueKey) {
+                dataMap.set(item._uniqueKey, item);
+            }
+        });
+        
         uniqueData = Array.from(dataMap.values());
         
-        console.log("Total raw data:", newDataArray.length + oldDataArray.length);
+        const totalRaw = newDataArray.length + oldDataArray.length + updateDataArray.length;
+        console.log("Total raw data:", totalRaw);
         console.log("Unique data after deduplication:", uniqueData.length);
-        console.log("Duplicates removed:", (newDataArray.length + oldDataArray.length) - uniqueData.length);
+        console.log("Duplicates removed:", totalRaw - uniqueData.length);
 
         isLoading = false;
-        showMessage(`✅ Đã tải ${uniqueData.length} khách hàng duy nhất (từ ${newDataArray.length} new + ${oldDataArray.length} old, đã loại bỏ ${(newDataArray.length + oldDataArray.length) - uniqueData.length} bản ghi trùng). Hãy nhập từ khóa để tìm kiếm.`);
+        showMessage(`✅ Đã tải ${uniqueData.length} khách hàng duy nhất (từ ${newDataArray.length} new + ${oldDataArray.length} old + ${updateDataArray.length} update, đã loại bỏ ${totalRaw - uniqueData.length} bản ghi trùng). Hãy nhập từ khóa để tìm kiếm.`);
         
     } catch (error) {
         isLoading = false;
@@ -354,24 +404,29 @@ function render(keyword = "") {
     let count = 0;
     let okCount = 0;
     let missingCount = 0;
+    let pendingCount = 0;
 
     for (const data of uniqueData) {
         if (!data._search.includes(kw)) continue;
 
-        const isSuccess = isSuccessfullyRegistered(data);
+        const status = getCustomerStatus(data);
         
         // Apply status filter
-        if (currentFilter === 'ok' && !isSuccess) continue;
-        if (currentFilter === 'missing' && isSuccess) continue;
+        if (currentFilter === 'ok' && status !== 'ok') continue;
+        if (currentFilter === 'missing' && status !== 'missing') continue;
+        if (currentFilter === 'pending' && status !== 'pending') continue;
 
         const tr = document.createElement("tr");
-        const maKH = normalizeValue(data["MÃ KH"]);
+        const maKH = normalizeValue(data["Mã KH"]);
         
-        tr.className = isSuccess ? "ok" : "missing";
-        
-        if (isSuccess) {
+        if (status === 'ok') {
+            tr.className = "ok";
             okCount++;
+        } else if (status === 'pending') {
+            tr.className = "pending";
+            pendingCount++;
         } else {
+            tr.className = "missing";
             missingCount++;
         }
 
@@ -388,6 +443,18 @@ function render(keyword = "") {
         const tinh = normalizeValue(data["Tỉnh"]);
         const tdvName = normalizeValue(data["TDV"]);
 
+        let statusDisplay, statusClass;
+        if (status === 'ok') {
+            statusDisplay = "✅ Đã tham gia";
+            statusClass = "status-ok";
+        } else if (status === 'pending') {
+            statusDisplay = "❓ Đã upload chưa kiểm tra";
+            statusClass = "status-pending";
+        } else {
+            statusDisplay = "❌ Chưa tham gia";
+            statusClass = "status-missing";
+        }
+
         tr.innerHTML = `
             <td>${maKH}</td>
             <td>${khachHang}</td>
@@ -398,8 +465,8 @@ function render(keyword = "") {
             <td>${teamKy2026}</td>
             <td>${dangKyThanhCong}</td>
             <td>${note}</td>
-            <td class="${isSuccess ? 'status-ok' : 'status-missing'}">
-                ${isSuccess ? "✅ Đã tham gia" : "❌ Chưa tham gia"}
+            <td class="${statusClass}">
+                ${statusDisplay}
             </td>
         `;
 
@@ -418,12 +485,14 @@ function render(keyword = "") {
         
         const filterText = currentFilter === 'all' ? '' : 
                           currentFilter === 'ok' ? ' (Chỉ hiển thị đã tham gia)' :
+                          currentFilter === 'pending' ? ' (Chỉ hiển thị đã upload chưa kiểm tra)' :
                           ' (Chỉ hiển thị chưa tham gia)';
         
         statsDiv.innerHTML = `
             📊 Tìm thấy <strong>${count}</strong> kết quả${filterText}
             | ✅ Đã tham gia: <strong>${okCount}</strong> 
             | ❌ Chưa tham gia: <strong>${missingCount}</strong>
+            | ❓ Đã upload chưa kiểm tra: <strong>${pendingCount}</strong>
             ${count >= MAX_RENDER ? ` (Hiển thị tối đa ${MAX_RENDER} kết quả)` : ''}
         `;
         statsDiv.style.display = "block";
