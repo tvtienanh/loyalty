@@ -426,6 +426,7 @@ async function loadData() {
             obj._isNew = true;
             obj._isUpdate = false;
             obj._uniqueKey = createUniqueKey(kh, sdt);
+            obj._ngayDate = null;
             
             newDataArray.push(obj);
         });
@@ -444,6 +445,7 @@ async function loadData() {
             obj._isNew = false;
             obj._isUpdate = false;
             obj._uniqueKey = createUniqueKey(kh, sdt);
+            obj._ngayDate = null;
             
             oldDataArray.push(obj);
         });
