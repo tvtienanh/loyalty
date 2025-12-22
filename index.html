@@ -237,7 +237,10 @@ function rowToObject(cols, row) {
         let value = "";
         
         if (cellValue !== null && cellValue !== undefined) {
-            if (cellValue.v !== null && cellValue.v !== undefined) {
+            // Thử lấy giá trị theo thứ tự ưu tiên: f (formatted) > v (value)
+            if (cellValue.f !== null && cellValue.f !== undefined) {
+                value = cellValue.f;
+            } else if (cellValue.v !== null && cellValue.v !== undefined) {
                 value = cellValue.v;
             }
         }
