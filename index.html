@@ -35,20 +35,104 @@
     
     .filter-box {
         margin-bottom: 20px;
-        padding: 15px;
-        background: #f9f9f9;
-        border-radius: 6px;
+        padding: 20px;
+        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        border-radius: 10px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.08);
     }
     
-    .filter-box label {
-        margin-right: 15px;
-        cursor: pointer;
+    .filter-group {
+        margin-bottom: 15px;
+    }
+    
+    .filter-group:last-child {
+        margin-bottom: 0;
+    }
+    
+    .filter-label {
+        display: block;
+        font-weight: 600;
+        color: #2c3e50;
+        margin-bottom: 10px;
         font-size: 14px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
     }
     
-    .filter-box input[type="radio"] {
-        margin-right: 5px;
+    .filter-options {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+    
+    .filter-chip {
+        position: relative;
+    }
+    
+    .filter-chip input[type="radio"],
+    .filter-chip input[type="checkbox"] {
+        display: none;
+    }
+    
+    .filter-chip label {
+        display: inline-block;
+        padding: 8px 16px;
+        background: white;
+        border: 2px solid #ddd;
+        border-radius: 20px;
         cursor: pointer;
+        font-size: 13px;
+        transition: all 0.3s ease;
+        user-select: none;
+    }
+    
+    .filter-chip label:hover {
+        border-color: #4CAF50;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(76, 175, 80, 0.2);
+    }
+    
+    .filter-chip input:checked + label {
+        background: #4CAF50;
+        color: white;
+        border-color: #4CAF50;
+        font-weight: 600;
+    }
+    
+    .province-select {
+        width: 100%;
+        max-width: 300px;
+        padding: 10px 15px;
+        font-size: 14px;
+        border: 2px solid #ddd;
+        border-radius: 8px;
+        background: white;
+        cursor: pointer;
+        transition: border-color 0.3s;
+    }
+    
+    .province-select:focus {
+        outline: none;
+        border-color: #4CAF50;
+    }
+    
+    .clear-filters {
+        margin-top: 15px;
+        padding: 8px 20px;
+        background: #ff5252;
+        color: white;
+        border: none;
+        border-radius: 20px;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 600;
+        transition: all 0.3s ease;
+    }
+    
+    .clear-filters:hover {
+        background: #ff1744;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(255, 82, 82, 0.3);
     }
     
     input[type="text"] { 
@@ -164,19 +248,36 @@
     </div>
     
     <div class="filter-box">
-        <strong>Lọc trạng thái:</strong>
-        <label>
-            <input type="radio" name="statusFilter" value="all" checked> Tất cả
-        </label>
-        <label>
-            <input type="radio" name="statusFilter" value="ok"> ✅ Đã tham gia
-        </label>
-        <label>
-            <input type="radio" name="statusFilter" value="missing"> ❌ Chưa tham gia
-        </label>
-        <label>
-            <input type="radio" name="statusFilter" value="pending"> ❓ Đã upload chưa kiểm tra
-        </label>
+        <div class="filter-group">
+            <span class="filter-label">🔍 Trạng thái</span>
+            <div class="filter-options">
+                <div class="filter-chip">
+                    <input type="radio" name="statusFilter" value="all" id="status-all" checked>
+                    <label for="status-all">📋 Tất cả</label>
+                </div>
+                <div class="filter-chip">
+                    <input type="radio" name="statusFilter" value="ok" id="status-ok">
+                    <label for="status-ok">✅ Đã tham gia</label>
+                </div>
+                <div class="filter-chip">
+                    <input type="radio" name="statusFilter" value="missing" id="status-missing">
+                    <label for="status-missing">❌ Chưa tham gia</label>
+                </div>
+                <div class="filter-chip">
+                    <input type="radio" name="statusFilter" value="pending" id="status-pending">
+                    <label for="status-pending">❓ Đã upload chưa kiểm tra</label>
+                </div>
+            </div>
+        </div>
+        
+        <div class="filter-group">
+            <span class="filter-label">📍 Tỉnh thành</span>
+            <select class="province-select" id="provinceFilter">
+                <option value="all">-- Tất cả tỉnh thành --</option>
+            </select>
+        </div>
+        
+        <button class="clear-filters" id="clearFilters">🔄 Xóa tất cả bộ lọc</button>
     </div>
     
     <div id="stats" class="stats" style="display:none;"></div>
@@ -218,6 +319,8 @@ let uniqueData = [];
 let debounceTimer;
 let isLoading = true;
 let currentFilter = 'all';
+let currentProvince = 'all';
+let allProvinces = new Set();
 
 /* ===== PARSE GOOGLE VISUALIZATION JSON ===== */
 function parseGViz(text) {
@@ -411,6 +514,17 @@ async function loadData() {
         
         uniqueData = Array.from(dataMap.values());
         
+        // Extract all unique provinces
+        uniqueData.forEach(item => {
+            const tinh = normalizeValue(item["Tỉnh"]);
+            if (tinh) {
+                allProvinces.add(tinh);
+            }
+        });
+        
+        // Populate province dropdown
+        populateProvinceFilter();
+        
         const totalRaw = newDataArray.length + oldDataArray.length + updateDataArray.length;
         console.log("Total raw data:", totalRaw);
         console.log("Unique data after deduplication:", uniqueData.length);
@@ -425,6 +539,22 @@ async function loadData() {
         showMessage("❌ Lỗi khi tải dữ liệu. Vui lòng thử lại sau.");
         console.error("Load error:", error);
     }
+}
+
+/* ===== POPULATE PROVINCE FILTER ===== */
+function populateProvinceFilter() {
+    const select = document.getElementById("provinceFilter");
+    const sortedProvinces = Array.from(allProvinces).sort();
+    
+    // Clear existing options except the first one
+    select.innerHTML = '<option value="all">-- Tất cả tỉnh thành --</option>';
+    
+    sortedProvinces.forEach(province => {
+        const option = document.createElement("option");
+        option.value = province;
+        option.textContent = province;
+        select.appendChild(option);
+    });
 }
 
 /* ===== RENDER TABLE ===== */
@@ -453,11 +583,15 @@ function render(keyword = "") {
         if (!data._search.includes(kw)) continue;
 
         const status = getCustomerStatus(data);
+        const tinh = normalizeValue(data["Tỉnh"]);
         
         // Apply status filter
         if (currentFilter === 'ok' && status !== 'ok') continue;
         if (currentFilter === 'missing' && status !== 'missing') continue;
         if (currentFilter === 'pending' && status !== 'pending') continue;
+        
+        // Apply province filter
+        if (currentProvince !== 'all' && tinh !== currentProvince) continue;
 
         const tr = document.createElement("tr");
         const maKH = normalizeValue(data["Mã KH"]);
@@ -531,8 +665,10 @@ function render(keyword = "") {
                           currentFilter === 'pending' ? ' (Chỉ hiển thị đã upload chưa kiểm tra)' :
                           ' (Chỉ hiển thị chưa tham gia)';
         
+        const provinceText = currentProvince !== 'all' ? ` - Tỉnh: ${currentProvince}` : '';
+        
         statsDiv.innerHTML = `
-            📊 Tìm thấy <strong>${count}</strong> kết quả${filterText}
+            📊 Tìm thấy <strong>${count}</strong> kết quả${filterText}${provinceText}
             | ✅ Đã tham gia: <strong>${okCount}</strong> 
             | ❌ Chưa tham gia: <strong>${missingCount}</strong>
             | ❓ Đã upload chưa kiểm tra: <strong>${pendingCount}</strong>
@@ -562,6 +698,30 @@ document.querySelectorAll('input[name="statusFilter"]').forEach(radio => {
         const keyword = document.getElementById("searchInput").value;
         render(keyword);
     });
+});
+
+/* ===== PROVINCE FILTER ===== */
+document.getElementById("provinceFilter").addEventListener('change', e => {
+    currentProvince = e.target.value;
+    const keyword = document.getElementById("searchInput").value;
+    render(keyword);
+});
+
+/* ===== CLEAR ALL FILTERS ===== */
+document.getElementById("clearFilters").addEventListener('click', () => {
+    // Reset status filter
+    document.getElementById("status-all").checked = true;
+    currentFilter = 'all';
+    
+    // Reset province filter
+    document.getElementById("provinceFilter").value = 'all';
+    currentProvince = 'all';
+    
+    // Reset search
+    document.getElementById("searchInput").value = '';
+    
+    // Re-render
+    render('');
 });
 
 document.getElementById("searchInput").focus();
