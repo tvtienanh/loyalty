@@ -6,6 +6,7 @@
 <title>Tra cứu Loyalty – CT 2026</title>
 
 <style>
+    /* GIỮ NGUYÊN CSS GỐC CỦA BẠN */
     * { box-sizing: border-box; }
     body { 
         font-family: 'Segoe UI', Tahoma, Arial, sans-serif; 
@@ -235,7 +236,7 @@
         font-style: italic;
     }
     
-    /* Modal/Popup styles */
+    /* MODAL GỐC CỦA BẠN */
     .modal {
         display: none;
         position: fixed;
@@ -317,17 +318,7 @@
         border-radius: 8px;
         box-shadow: 0 2px 10px rgba(0,0,0,0.2);
     }
-    
-    .image-loading {
-        padding: 40px;
-        color: #666;
-    }
-    
-    .image-error {
-        padding: 40px;
-        color: #f44336;
-    }
-    
+
     .clickable-status {
         cursor: pointer;
         text-decoration: underline;
@@ -336,6 +327,15 @@
     
     .clickable-status:hover {
         opacity: 0.7;
+    }
+
+    /* Thêm style cho phần ký lộn */
+    .conflict-link {
+        color: #d32f2f;
+        text-decoration: underline;
+        cursor: pointer;
+        font-weight: bold;
+        margin-left: 5px;
     }
 </style>
 </head>
@@ -421,7 +421,6 @@
     </div>
 </div>
 
-<!-- Image Modal -->
 <div id="imageModal" class="modal">
     <div class="modal-content">
         <div class="modal-header">
@@ -439,507 +438,210 @@ const NEW_URL = "https://docs.google.com/spreadsheets/d/14dZ70xuUlYskJHGLfF4dI_l
 const OLD_URL = "https://docs.google.com/spreadsheets/d/14dZ70xuUlYskJHGLfF4dI_lY_V8vsqJfAJ-Dlo_DdrU/gviz/tq?tqx=out:json&sheet=original_data&tq=select%20*%20limit%2020000";
 const UPDATE_URL = "https://docs.google.com/spreadsheets/d/14dZ70xuUlYskJHGLfF4dI_lY_V8vsqJfAJ-Dlo_DdrU/gviz/tq?tqx=out:json&sheet=bc_loyalty&tq=select%20*%20limit%2020000";
 
-const MAX_RENDER = 10000;
-
 let uniqueData = [];
-let debounceTimer;
+let loyaltyImages = new Map(); // Dùng để truy xuất ảnh cho Approved/Error
 let isLoading = true;
 let currentFilter = 'all';
 let currentProvince = 'all';
 let allProvinces = new Set();
 
-/* ===== IMAGE MODAL FUNCTIONS ===== */
 function openImageModal(imageUrl, customerName) {
     const modal = document.getElementById("imageModal");
     const modalBody = document.getElementById("modalBody");
-    
-    if (!imageUrl) {
-        modalBody.innerHTML = '<div class="image-error">❌ Không có hình ảnh</div>';
-        modal.style.display = "block";
-        return;
-    }
-    
-    modalBody.innerHTML = '<div class="image-loading">⏳ Đang tải hình ảnh...</div>';
+    if (!imageUrl) return;
+    modalBody.innerHTML = '<div class="image-loading">⏳ Đang tải...</div>';
     modal.style.display = "block";
-    
     const img = new Image();
     img.className = "modal-image";
-    img.onload = function() {
-        modalBody.innerHTML = '';
-        modalBody.appendChild(img);
-    };
-    img.onerror = function() {
-        modalBody.innerHTML = '<div class="image-error">❌ Không thể tải hình ảnh<br><small>' + imageUrl + '</small></div>';
-    };
     img.src = imageUrl;
+    img.onload = () => { modalBody.innerHTML = ''; modalBody.appendChild(img); };
+    img.onerror = () => { modalBody.innerHTML = '<div style="color:red">❌ Không tải được ảnh.</div>'; };
 }
 
-function closeImageModal() {
-    const modal = document.getElementById("imageModal");
-    modal.style.display = "none";
-}
+function closeImageModal() { document.getElementById("imageModal").style.display = "none"; }
 
-// Close modal when clicking outside
-window.onclick = function(event) {
-    const modal = document.getElementById("imageModal");
-    if (event.target === modal) {
-        closeImageModal();
-    }
-}
-
-// Close modal with ESC key
-document.addEventListener('keydown', function(event) {
-    if (event.key === 'Escape') {
-        closeImageModal();
-    }
-});
-
-/* ===== PARSE GOOGLE VISUALIZATION JSON ===== */
 function parseGViz(text) {
     const jsonText = text.substring(47, text.length - 2);
     return JSON.parse(jsonText);
 }
 
-function normalizeValue(val) {
-    if (val === null || val === undefined || val === "") return "";
-    return String(val).trim();
-}
+function normalizeValue(val) { return val ? String(val).trim() : ""; }
 
 function rowToObject(cols, row) {
     const obj = {};
     cols.forEach((col, i) => {
         const cellValue = row.c[i];
-        let value = "";
-        
-        if (cellValue !== null && cellValue !== undefined) {
-            if (cellValue.f !== null && cellValue.f !== undefined) {
-                value = cellValue.f;
-            } else if (cellValue.v !== null && cellValue.v !== undefined) {
-                value = cellValue.v;
-            }
-        }
-        
-        obj[col.label] = value;
+        obj[col.label] = cellValue ? (cellValue.f || cellValue.v || "") : "";
     });
     return obj;
 }
 
-/* ===== CREATE UNIQUE KEY FOR DEDUPLICATION ===== */
 function createUniqueKey(kh, sdt) {
-    const khNorm = normalizeValue(kh).toLowerCase().replace(/\s+/g, '');
-    const sdtNorm = normalizeValue(sdt).replace(/\s+/g, '');
-    return `${khNorm}|${sdtNorm}`;
+    return `${normalizeValue(kh).toLowerCase().replace(/\s+/g, '')}|${normalizeValue(sdt).replace(/\s+/g, '')}`;
 }
 
-/* ===== PARSE DATETIME FROM NGAY COLUMN ===== */
-function parseNgayColumn(ngayStr) {
-    if (!ngayStr) return null;
-    try {
-        const str = normalizeValue(ngayStr);
-        if (!str) return null;
-        const date = new Date(str);
-        if (isNaN(date.getTime())) return null;
-        return date;
-    } catch (e) {
-        return null;
-    }
-}
-
-/* ===== DETERMINE CUSTOMER STATUS ===== */
-function determineCustomerStatus(data) {
-    const source = data._source; // 'new', 'bc_loyalty', 'original'
-    
-    if (source === 'new') {
-        // Khách hàng từ new_data: đã đăng ký 2026 và được phê duyệt hoặc bị lỗi
-        const dangKy = normalizeValue(data["Đăng ký thành công"]).toUpperCase();
-        const noteHinhAnh = normalizeValue(data["Note hình ảnh"]);
-        const thongTinSai = normalizeValue(data["Thông tin sai/thiếu (nếu có)"]);
-        
-        if (dangKy === "OK") {
-            return {
-                status: "approved-2026",
-                display: "✅ Đã ký 2026 & Đã duyệt",
-                status2025: "Đã ký 2025",
-                status2026: "Đã ký 2026 - ĐÃ DUYỆT",
-                note: ""
-            };
-        } else {
-            return {
-                status: "error-2026",
-                display: "❌ Đã ký 2026 bị lỗi",
-                status2025: "Đã ký 2025",
-                status2026: "Đã ký 2026 - BỊ LỖI",
-                note: [noteHinhAnh, thongTinSai].filter(n => n).join(" | ")
-            };
-        }
-    } else if (source === 'bc_loyalty') {
-        // Khách hàng từ bc_loyalty: có thể là mới ký 2025 hoặc đã ký 2026 chưa duyệt
-        const formType = normalizeValue(data["Cột A"] || data["Form"] || "");
-        
-        if (formType.includes("FM2601")) {
-            // Đã đăng ký 2026 nhưng chưa được duyệt
-            return {
-                status: "pending-2026",
-                display: "⏳ Đã ký 2026 chưa duyệt",
-                status2025: "Đã ký 2025",
-                status2026: "Đã ký 2026 - CHƯA DUYỆT",
-                note: ""
-            };
-        } else if (formType.includes("FM2501")) {
-            // Mới đăng ký 2025, chưa đăng ký 2026
-            return {
-                status: "new-2025-only",
-                display: "🆕 Mới ký 2025 chưa ký 2026",
-                status2025: "Mới ký 2025",
-                status2026: "Chưa ký 2026",
-                note: ""
-            };
-        } else {
-            // Trường hợp không xác định được form type, mặc định là đã ký 2026 chưa duyệt
-            return {
-                status: "pending-2026",
-                display: "⏳ Đã ký 2026 chưa duyệt",
-                status2025: "Đã ký 2025",
-                status2026: "Đã ký 2026 - CHƯA DUYỆT",
-                note: ""
-            };
-        }
-    } else if (source === 'original') {
-        // Khách hàng từ original_data: đã ký 2025, chưa ký 2026
-        return {
-            status: "old-2025-no-2026",
-            display: "⚠️ Đã ký 2025 chưa ký 2026",
-            status2025: "Đã ký 2025",
-            status2026: "Chưa ký 2026",
-            note: ""
-        };
-    }
-    
-    return {
-        status: "unknown",
-        display: "❓ Không xác định",
-        status2025: "",
-        status2026: "",
-        note: ""
-    };
-}
-
-/* ===== LOAD DATA ===== */
 async function loadData() {
     try {
-        const [newResponse, oldResponse, updateResponse] = await Promise.all([
-            fetch(NEW_URL),
-            fetch(OLD_URL),
-            fetch(UPDATE_URL)
-        ]);
+        const [newRes, oldRes, updateRes] = await Promise.all([fetch(NEW_URL), fetch(OLD_URL), fetch(UPDATE_URL)]);
+        const newJson = parseGViz(await newRes.text());
+        const oldJson = parseGViz(await oldRes.text());
+        const updateJson = parseGViz(await updateRes.text());
 
-        const newText = await newResponse.text();
-        const oldText = await oldResponse.text();
-        const updateText = await updateResponse.text();
-
-        const newJson = parseGViz(newText);
-        const oldJson = parseGViz(oldText);
-        const updateJson = parseGViz(updateText);
-
-        console.log("=== DEBUG INFO ===");
-        console.log("New data rows:", newJson.table.rows.length);
-        console.log("Old data rows:", oldJson.table.rows.length);
-        console.log("Update data rows:", updateJson.table.rows.length);
-
-        // Process new_data
-        const newDataArray = [];
-        newJson.table.rows.forEach(row => {
-            const obj = rowToObject(newJson.table.cols, row);
-            
-            const maKH = normalizeValue(obj["Mã KH"]);
-            const sdt = normalizeValue(obj["Số điện thoại di động"]);
-            const kh = normalizeValue(obj["KH"]);
-            const tdv = normalizeValue(obj["TDV"]);
-            
-            obj._search = [maKH, kh, sdt, tdv].join(" ").toLowerCase();
-            obj._source = "new";
-            obj._uniqueKey = createUniqueKey(kh, sdt);
-            obj._ngayDate = null;
-            
-            newDataArray.push(obj);
-        });
-
-        // Process original_data
-        const oldDataArray = [];
-        oldJson.table.rows.forEach(row => {
-            const obj = rowToObject(oldJson.table.cols, row);
-            
-            const maKH = normalizeValue(obj["Mã KH"]);
-            const sdt = normalizeValue(obj["Số điện thoại di động"]);
-            const kh = normalizeValue(obj["KH"]);
-            const tdv = normalizeValue(obj["TDV"]);
-            
-            obj._search = [maKH, kh, sdt, tdv].join(" ").toLowerCase();
-            obj._source = "original";
-            obj._uniqueKey = createUniqueKey(kh, sdt);
-            obj._ngayDate = null;
-            
-            oldDataArray.push(obj);
-        });
-
-        // Process bc_loyalty (update data)
-        const updateDataArray = [];
+        // Xử lý bc_loyalty để tìm ảnh và xử lý trùng (ký lộn)
+        const loyaltyLookup = new Map();
         updateJson.table.rows.forEach(row => {
             const obj = rowToObject(updateJson.table.cols, row);
-            
-            const maKH = normalizeValue(obj["Mã KH"]);
-            const sdt = normalizeValue(obj["Số điện thoại di động"]);
-            const kh = normalizeValue(obj["KH"]);
-            const tdv = normalizeValue(obj["TDV"]);
-            const ngay = normalizeValue(obj["NGAY"]);
-            
-            // Lấy cột A (có thể là tên khác nhau tùy sheet)
-            const colA = normalizeValue(
-                obj["Cột A"] || 
-                obj["Form"] || 
-                obj["Loại form"] ||
-                obj[updateJson.table.cols[0]?.label] || 
-                ""
-            );
-            
-            // Lấy đường link hình ảnh từ cột N (index 13)
-            const imageUrl = normalizeValue(
-                obj["Link ảnh"] ||
-                obj["Hình ảnh"] ||
-                obj[updateJson.table.cols[13]?.label] ||
-                ""
-            );
-            
-            obj._search = [maKH, kh, sdt, tdv].join(" ").toLowerCase();
-            obj._source = "bc_loyalty";
-            obj._uniqueKey = createUniqueKey(kh, sdt);
-            obj._ngayDate = parseNgayColumn(ngay);
-            obj._imageUrl = imageUrl; // Lưu link ảnh
-            obj["Cột A"] = colA; // Lưu lại để xác định form type
-            
-            updateDataArray.push(obj);
-        });
+            const key = createUniqueKey(obj["KH"], obj["Số điện thoại di động"]);
+            const tdv = normalizeValue(obj["TDV"] || obj["Tên TDV gửi code"] || "");
+            const img = normalizeValue(obj["Link ảnh"] || obj["Hình ảnh"] || obj[updateJson.table.cols[13]?.label] || "");
+            const ngayStr = normalizeValue(obj["NGAY"]);
+            const ngayDate = ngayStr ? new Date(ngayStr) : new Date(0);
 
-        // Merge và loại bỏ trùng lặp
-        // Ưu tiên: new_data > bc_loyalty (đăng ký sớm nhất) > original_data
-        const dataMap = new Map();
-        
-        // Thêm old data trước (ưu tiên thấp nhất)
-        oldDataArray.forEach(item => {
-            if (item._uniqueKey) {
-                dataMap.set(item._uniqueKey, item);
-            }
-        });
-        
-        // Thêm update data (bc_loyalty)
-        updateDataArray.forEach(item => {
-            if (item._uniqueKey) {
-                const existing = dataMap.get(item._uniqueKey);
-                
-                if (!existing || existing._source === 'original') {
-                    dataMap.set(item._uniqueKey, item);
-                } else if (existing._source === 'bc_loyalty') {
-                    // Cả hai đều từ bc_loyalty, lấy bản đăng ký sớm hơn
-                    if (item._ngayDate && existing._ngayDate) {
-                        if (item._ngayDate < existing._ngayDate) {
-                            dataMap.set(item._uniqueKey, item);
-                        }
-                    } else if (item._ngayDate && !existing._ngayDate) {
-                        dataMap.set(item._uniqueKey, item);
+            if (!loyaltyLookup.has(key)) {
+                loyaltyLookup.set(key, { main: obj, conflicts: [], lastDate: ngayDate, mainTdv: tdv, mainImg: img });
+            } else {
+                let entry = loyaltyLookup.get(key);
+                if (tdv === entry.mainTdv) {
+                    // Cùng TDV -> Lấy bản mới nhất
+                    if (ngayDate > entry.lastDate) {
+                        entry.main = obj;
+                        entry.lastDate = ngayDate;
+                        entry.mainImg = img;
                     }
+                } else {
+                    // Khác TDV -> Ký lộn
+                    entry.conflicts.push({ tdv: tdv, img: img });
                 }
             }
         });
-        
-        // Thêm new data cuối cùng (ưu tiên cao nhất)
-        newDataArray.forEach(item => {
-            if (item._uniqueKey) {
-                dataMap.set(item._uniqueKey, item);
-            }
-        });
-        
-        uniqueData = Array.from(dataMap.values());
-        
-        // Extract all unique provinces
-        uniqueData.forEach(item => {
-            const tinh = normalizeValue(item["Tỉnh"]);
-            if (tinh) {
-                allProvinces.add(tinh);
-            }
-        });
-        
-        populateProvinceFilter();
-        
-        const totalRaw = newDataArray.length + oldDataArray.length + updateDataArray.length;
-        console.log("Total raw data:", totalRaw);
-        console.log("Unique data after deduplication:", uniqueData.length);
-        console.log("Duplicates removed:", totalRaw - uniqueData.length);
 
-        isLoading = false;
-        showMessage(`✅ Đã tải ${uniqueData.length} khách hàng duy nhất (từ ${newDataArray.length} new + ${updateDataArray.length} bc_loyalty + ${oldDataArray.length} old). Hãy nhập từ khóa để tìm kiếm.`);
+        // Gộp dữ liệu
+        const masterMap = new Map();
         
-    } catch (error) {
+        // 1. Data cũ
+        oldJson.table.rows.forEach(row => {
+            const obj = rowToObject(oldJson.table.cols, row);
+            const key = createUniqueKey(obj["KH"], obj["Số điện thoại di động"]);
+            obj._source = "original";
+            masterMap.set(key, obj);
+        });
+
+        // 2. Data bc_loyalty
+        loyaltyLookup.forEach((entry, key) => {
+            let obj = entry.main;
+            obj._source = "bc_loyalty";
+            obj._conflicts = entry.conflicts;
+            obj._img = entry.mainImg;
+            masterMap.set(key, obj);
+        });
+
+        // 3. Data New (Duyệt/Lỗi)
+        newJson.table.rows.forEach(row => {
+            const obj = rowToObject(newJson.table.cols, row);
+            const key = createUniqueKey(obj["KH"], obj["Số điện thoại di động"]);
+            const existing = loyaltyLookup.get(key);
+            obj._source = "new";
+            if (existing) {
+                obj._img = existing.mainImg;
+                obj._conflicts = existing.conflicts;
+            }
+            masterMap.set(key, obj);
+        });
+
+        uniqueData = Array.from(masterMap.values()).map(item => {
+            const tinh = normalizeValue(item["Tỉnh"]);
+            if (tinh) allProvinces.add(tinh);
+            item._search = `${item["Mã KH"]} ${item["KH"]} ${item["Số điện thoại di động"]} ${item["TDV"]}`.toLowerCase();
+            return item;
+        });
+
+        populateProvinceFilter();
         isLoading = false;
-        showMessage("❌ Lỗi khi tải dữ liệu. Vui lòng thử lại sau.");
-        console.error("Load error:", error);
+        render();
+    } catch (error) {
+        console.error(error);
+        showMessage("❌ Lỗi tải dữ liệu.");
     }
 }
 
-/* ===== POPULATE PROVINCE FILTER ===== */
-function populateProvinceFilter() {
-    const select = document.getElementById("provinceFilter");
-    const sortedProvinces = Array.from(allProvinces).sort();
-    
-    select.innerHTML = '<option value="all">-- Tất cả tỉnh thành --</option>';
-    
-    sortedProvinces.forEach(province => {
-        const option = document.createElement("option");
-        option.value = province;
-        option.textContent = province;
-        select.appendChild(option);
-    });
+function determineStatus(data) {
+    if (data._source === "new") {
+        const ok = normalizeValue(data["Đăng ký thành công"]).toUpperCase() === "OK";
+        return {
+            status: ok ? "approved-2026" : "error-2026",
+            display: ok ? "✅ Đã duyệt" : "❌ Bị lỗi",
+            s25: "Đã ký 2025", s26: ok ? "Đã ký 2026 - ĐÃ DUYỆT" : "Đã ký 2026 - LỖI",
+            note: [data["Note hình ảnh"], data["Thông tin sai/thiếu (nếu có)"]].filter(n => n).join(" | ")
+        };
+    } else if (data._source === "bc_loyalty") {
+        const form = normalizeValue(data["Cột A"] || data["Form"] || "");
+        if (form.includes("FM2501")) return { status: "new-2025-only", display: "🆕 Mới ký 2025", s25: "Mới ký 2025", s26: "Chưa ký 2026", note: "" };
+        return { status: "pending-2026", display: "⏳ Chờ duyệt", s25: "Đã ký 2025", s26: "Đã ký 2026 - CHỜ DUYỆT", note: "" };
+    }
+    return { status: "old-2025-no-2026", display: "⚠️ Chưa ký 2026", s25: "Đã ký 2025", s26: "Chưa ký 2026", note: "" };
 }
 
-/* ===== RENDER TABLE ===== */
 function render(keyword = "") {
     const tbody = document.getElementById("tbody");
-    const statsDiv = document.getElementById("stats");
-    
-    if (isLoading) {
+    if (isLoading) return;
+    const kw = keyword.toLowerCase().trim() || document.getElementById("searchInput").value.toLowerCase().trim();
+    if (!kw && currentFilter === 'all' && currentProvince === 'all') {
+        tbody.innerHTML = '<tr><td colspan="9" class="no-results">🔍 Nhập từ khóa để tìm kiếm...</td></tr>';
         return;
     }
 
-    if (!keyword.trim()) {
-        tbody.innerHTML = '<tr><td colspan="9" class="no-results">👆 Nhập từ khóa để bắt đầu tìm kiếm</td></tr>';
-        statsDiv.style.display = "none";
-        return;
-    }
-
-    const kw = keyword.toLowerCase().trim();
     const fragment = document.createDocumentFragment();
-    let count = 0;
-    
-    const stats = {
-        'approved-2026': 0,
-        'pending-2026': 0,
-        'error-2026': 0,
-        'new-2025-only': 0,
-        'old-2025-no-2026': 0
-    };
-
-    for (const data of uniqueData) {
-        if (!data._search.includes(kw)) continue;
-
-        const statusInfo = determineCustomerStatus(data);
-        const tinh = normalizeValue(data["Tỉnh"]);
-        
-        // Apply status filter
-        if (currentFilter !== 'all' && statusInfo.status !== currentFilter) continue;
-        
-        // Apply province filter
-        if (currentProvince !== 'all' && tinh !== currentProvince) continue;
+    uniqueData.forEach(item => {
+        if (kw && !item._search.includes(kw)) return;
+        if (currentProvince !== 'all' && normalizeValue(item["Tỉnh"]) !== currentProvince) return;
+        const info = determineStatus(item);
+        if (currentFilter !== 'all' && info.status !== currentFilter) return;
 
         const tr = document.createElement("tr");
-        tr.className = statusInfo.status;
-        
-        stats[statusInfo.status]++;
+        tr.className = info.status;
 
-        const maKH = normalizeValue(data["Mã KH"]);
-        const sdt = normalizeValue(data["Số điện thoại di động"]);
-        const khachHang = normalizeValue(data["KH"]);
-        const tdvName = normalizeValue(data["TDV"]);
-        const imageUrl = data._imageUrl || "";
-        
-        const statusCellClass = imageUrl ? 'clickable-status' : '';
-        const statusCellOnClick = imageUrl ? `onclick="openImageModal('${imageUrl}', '${khachHang}')"` : '';
+        // Xử lý hiển thị ký lộn trong cột ghi chú
+        let conflictLinks = "";
+        if (item._conflicts && item._conflicts.length > 0) {
+            item._conflicts.forEach(c => {
+                conflictLinks += `<span class="conflict-link" onclick="openImageModal('${c.img}', '${c.tdv} ký lộn')">${c.tdv} ký lộn</span> `;
+            });
+        }
+
+        const imgUrl = item._img || "";
+        const statusClass = imgUrl ? "clickable-status" : "";
+        const onclick = imgUrl ? `onclick="openImageModal('${imgUrl}', '${item["KH"]}')"` : "";
 
         tr.innerHTML = `
-            <td>${maKH}</td>
-            <td>${khachHang}</td>
-            <td>${tinh}</td>
-            <td>${sdt}</td>
-            <td>${tdvName}</td>
-            <td>${statusInfo.status2025}</td>
-            <td>${statusInfo.status2026}</td>
-            <td>${statusInfo.note}</td>
-            <td class="status-${statusInfo.status.replace(/-/g, '-')} ${statusCellClass}" ${statusCellOnClick} title="${imageUrl ? 'Click để xem hình ảnh' : ''}">${statusInfo.display}</td>
+            <td>${item["Mã KH"] || ""}</td>
+            <td>${item["KH"] || ""}</td>
+            <td>${item["Tỉnh"] || ""}</td>
+            <td>${item["Số điện thoại di động"] || ""}</td>
+            <td>${item["TDV"] || ""}</td>
+            <td>${info.s25}</td>
+            <td>${info.s26}</td>
+            <td>${info.note} ${conflictLinks}</td>
+            <td class="${statusClass}" ${onclick}>${info.display} ${imgUrl ? '🖼️' : ''}</td>
         `;
-
         fragment.appendChild(tr);
-        count++;
-        
-        if (count >= MAX_RENDER) break;
-    }
-
-    if (count === 0) {
-        tbody.innerHTML = '<tr><td colspan="9" class="no-results">🔍 Không tìm thấy kết quả phù hợp</td></tr>';
-        statsDiv.style.display = "none";
-    } else {
-        tbody.innerHTML = "";
-        tbody.appendChild(fragment);
-        
-        const filterText = currentFilter === 'all' ? '' : ` (Lọc: ${document.querySelector(`#status-${currentFilter.split('-')[0]}`).nextElementSibling.textContent})`;
-        const provinceText = currentProvince !== 'all' ? ` - Tỉnh: ${currentProvince}` : '';
-        
-        statsDiv.innerHTML = `
-            📊 Tìm thấy <strong>${count}</strong> kết quả${filterText}${provinceText}<br>
-            ✅ Đã ký 2026 & Duyệt: <strong>${stats['approved-2026']}</strong> | 
-            ⏳ Đã ký 2026 chưa duyệt: <strong>${stats['pending-2026']}</strong> | 
-            ❌ Đã ký 2026 bị lỗi: <strong>${stats['error-2026']}</strong><br>
-            🆕 Mới ký 2025: <strong>${stats['new-2025-only']}</strong> | 
-            ⚠️ Đã ký 2025 chưa ký 2026: <strong>${stats['old-2025-no-2026']}</strong>
-            ${count >= MAX_RENDER ? ` (Hiển thị tối đa ${MAX_RENDER} kết quả)` : ''}
-        `;
-        statsDiv.style.display = "block";
-    }
-}
-
-/* ===== SHOW MESSAGE ===== */
-function showMessage(msg) {
-    const tbody = document.getElementById("tbody");
-    tbody.innerHTML = `<tr><td colspan="9" class="loading">${msg}</td></tr>`;
-}
-
-/* ===== SEARCH WITH DEBOUNCE ===== */
-document.getElementById("searchInput").addEventListener("input", e => {
-    clearTimeout(debounceTimer);
-    const value = e.target.value;
-    debounceTimer = setTimeout(() => render(value), 250);
-});
-
-/* ===== STATUS FILTER ===== */
-document.querySelectorAll('input[name="statusFilter"]').forEach(radio => {
-    radio.addEventListener('change', e => {
-        currentFilter = e.target.value;
-        const keyword = document.getElementById("searchInput").value;
-        render(keyword);
     });
-});
+    tbody.innerHTML = "";
+    tbody.appendChild(fragment);
+}
 
-/* ===== PROVINCE FILTER ===== */
-document.getElementById("provinceFilter").addEventListener('change', e => {
-    currentProvince = e.target.value;
-    const keyword = document.getElementById("searchInput").value;
-    render(keyword);
-});
+function populateProvinceFilter() {
+    const select = document.getElementById("provinceFilter");
+    Array.from(allProvinces).sort().forEach(p => select.add(new Option(p, p)));
+}
 
-/* ===== CLEAR ALL FILTERS ===== */
-document.getElementById("clearFilters").addEventListener('click', () => {
-    document.getElementById("status-all").checked = true;
-    currentFilter = 'all';
-    
-    document.getElementById("provinceFilter").value = 'all';
-    currentProvince = 'all';
-    
-    document.getElementById("searchInput").value = '';
-    
-    render('');
-});
+function showMessage(msg) { document.getElementById("tbody").innerHTML = `<tr><td colspan="9" class="loading">${msg}</td></tr>`; }
 
-document.getElementById("searchInput").focus();
+document.getElementById("searchInput").addEventListener("input", e => render(e.target.value));
+document.querySelectorAll('input[name="statusFilter"]').forEach(r => r.addEventListener('change', e => { currentFilter = e.target.value; render(); }));
+document.getElementById("provinceFilter").addEventListener('change', e => { currentProvince = e.target.value; render(); });
+document.getElementById("clearFilters").addEventListener('click', () => { location.reload(); });
 
 loadData();
 </script>
-
 </body>
 </html>
