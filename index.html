@@ -337,6 +337,18 @@
     .clickable-status:hover {
         opacity: 0.7;
     }
+    
+    .duplicate-warning {
+        color: #ff9800;
+        font-weight: bold;
+        cursor: pointer;
+        text-decoration: underline;
+        margin-left: 5px;
+    }
+    
+    .duplicate-warning:hover {
+        color: #f57c00;
+    }
 </style>
 </head>
 
@@ -547,10 +559,9 @@ function parseNgayColumn(ngayStr) {
 
 /* ===== DETERMINE CUSTOMER STATUS ===== */
 function determineCustomerStatus(data) {
-    const source = data._source; // 'new', 'bc_loyalty', 'original'
+    const source = data._source;
     
     if (source === 'new') {
-        // Khách hàng từ new_data: đã đăng ký 2026 và được phê duyệt hoặc bị lỗi
         const dangKy = normalizeValue(data["Đăng ký thành công"]).toUpperCase();
         const noteHinhAnh = normalizeValue(data["Note hình ảnh"]);
         const thongTinSai = normalizeValue(data["Thông tin sai/thiếu (nếu có)"]);
@@ -573,11 +584,9 @@ function determineCustomerStatus(data) {
             };
         }
     } else if (source === 'bc_loyalty') {
-        // Khách hàng từ bc_loyalty: có thể là mới ký 2025 hoặc đã ký 2026 chưa duyệt
         const formType = normalizeValue(data["Cột A"] || data["Form"] || "");
         
         if (formType.includes("FM2601")) {
-            // Đã đăng ký 2026 nhưng chưa được duyệt
             return {
                 status: "pending-2026",
                 display: "⏳ Đã ký 2026 chưa duyệt",
@@ -586,7 +595,6 @@ function determineCustomerStatus(data) {
                 note: ""
             };
         } else if (formType.includes("FM2501")) {
-            // Mới đăng ký 2025, chưa đăng ký 2026
             return {
                 status: "new-2025-only",
                 display: "🆕 Mới ký 2025 chưa ký 2026",
@@ -595,7 +603,6 @@ function determineCustomerStatus(data) {
                 note: ""
             };
         } else {
-            // Trường hợp không xác định được form type, mặc định là đã ký 2026 chưa duyệt
             return {
                 status: "pending-2026",
                 display: "⏳ Đã ký 2026 chưa duyệt",
@@ -605,7 +612,6 @@ function determineCustomerStatus(data) {
             };
         }
     } else if (source === 'original') {
-        // Khách hàng từ original_data: đã ký 2025, chưa ký 2026
         return {
             status: "old-2025-no-2026",
             display: "⚠️ Đã ký 2025 chưa ký 2026",
@@ -648,6 +654,7 @@ async function loadData() {
 
         // Process new_data
         const newDataArray = [];
+        
         newJson.table.rows.forEach(row => {
             const obj = rowToObject(newJson.table.cols, row);
             
@@ -656,10 +663,19 @@ async function loadData() {
             const kh = normalizeValue(obj["KH"]);
             const tdv = normalizeValue(obj["TDV"]);
             
+            // Lấy link ảnh từ new_data (cột thứ 14, index 13)
+            const imageUrl = normalizeValue(
+                obj["Link ảnh"] ||
+                obj["Hình ảnh"] ||
+                obj[newJson.table.cols[13]?.label] ||
+                ""
+            );
+            
             obj._search = [maKH, kh, sdt, tdv].join(" ").toLowerCase();
             obj._source = "new";
             obj._uniqueKey = createUniqueKey(kh, sdt);
             obj._ngayDate = null;
+            obj._imageUrl = imageUrl;
             
             newDataArray.push(obj);
         });
@@ -678,12 +694,15 @@ async function loadData() {
             obj._source = "original";
             obj._uniqueKey = createUniqueKey(kh, sdt);
             obj._ngayDate = null;
+            obj._imageUrl = "";
             
             oldDataArray.push(obj);
         });
 
-        // Process bc_loyalty (update data)
+        // Process bc_loyalty - Thu thập tất cả records theo uniqueKey
         const updateDataArray = [];
+        const bcLoyaltyByKey = new Map(); // Map<uniqueKey, Array<records>>
+        
         updateJson.table.rows.forEach(row => {
             const obj = rowToObject(updateJson.table.cols, row);
             
@@ -693,7 +712,6 @@ async function loadData() {
             const tdv = normalizeValue(obj["TDV"]);
             const ngay = normalizeValue(obj["NGAY"]);
             
-            // Lấy cột A (có thể là tên khác nhau tùy sheet)
             const colA = normalizeValue(
                 obj["Cột A"] || 
                 obj["Form"] || 
@@ -702,7 +720,6 @@ async function loadData() {
                 ""
             );
             
-            // Lấy đường link hình ảnh từ cột N (index 13)
             const imageUrl = normalizeValue(
                 obj["Link ảnh"] ||
                 obj["Hình ảnh"] ||
@@ -714,24 +731,29 @@ async function loadData() {
             obj._source = "bc_loyalty";
             obj._uniqueKey = createUniqueKey(kh, sdt);
             obj._ngayDate = parseNgayColumn(ngay);
-            obj._imageUrl = imageUrl; // Lưu link ảnh
-            obj["Cột A"] = colA; // Lưu lại để xác định form type
+            obj._imageUrl = imageUrl;
+            obj["Cột A"] = colA;
             
             updateDataArray.push(obj);
+            
+            // Lưu vào map để check duplicate
+            if (!bcLoyaltyByKey.has(obj._uniqueKey)) {
+                bcLoyaltyByKey.set(obj._uniqueKey, []);
+            }
+            bcLoyaltyByKey.get(obj._uniqueKey).push(obj);
         });
 
         // Merge và loại bỏ trùng lặp
-        // Ưu tiên: new_data > bc_loyalty (đăng ký sớm nhất) > original_data
         const dataMap = new Map();
         
-        // Thêm old data trước (ưu tiên thấp nhất)
+        // Thêm old data trước
         oldDataArray.forEach(item => {
             if (item._uniqueKey) {
                 dataMap.set(item._uniqueKey, item);
             }
         });
         
-        // Thêm update data (bc_loyalty)
+        // Thêm bc_loyalty data và xử lý duplicate
         updateDataArray.forEach(item => {
             if (item._uniqueKey) {
                 const existing = dataMap.get(item._uniqueKey);
@@ -739,7 +761,6 @@ async function loadData() {
                 if (!existing || existing._source === 'original') {
                     dataMap.set(item._uniqueKey, item);
                 } else if (existing._source === 'bc_loyalty') {
-                    // Cả hai đều từ bc_loyalty, lấy bản đăng ký sớm hơn
                     if (item._ngayDate && existing._ngayDate) {
                         if (item._ngayDate < existing._ngayDate) {
                             dataMap.set(item._uniqueKey, item);
@@ -758,9 +779,32 @@ async function loadData() {
             }
         });
         
-        uniqueData = Array.from(dataMap.values());
+        // Xử lý duplicate warnings
+        uniqueData = Array.from(dataMap.values()).map(item => {
+            const bcRecords = bcLoyaltyByKey.get(item._uniqueKey);
+            
+            if (bcRecords && bcRecords.length > 1) {
+                // Có duplicate, tìm các TDV đã upload sau người đầu tiên
+                const sorted = bcRecords.sort((a, b) => {
+                    if (!a._ngayDate) return 1;
+                    if (!b._ngayDate) return -1;
+                    return a._ngayDate - b._ngayDate;
+                });
+                
+                const duplicates = sorted.slice(1); // Bỏ qua record đầu tiên
+                item._duplicates = duplicates.map(dup => ({
+                    tdv: normalizeValue(dup["TDV"]),
+                    imageUrl: dup._imageUrl,
+                    ngay: dup._ngayDate
+                }));
+            } else {
+                item._duplicates = [];
+            }
+            
+            return item;
+        });
         
-        // Extract all unique provinces
+        // Extract provinces
         uniqueData.forEach(item => {
             const tinh = normalizeValue(item["Tỉnh"]);
             if (tinh) {
@@ -776,170 +820,4 @@ async function loadData() {
         console.log("Duplicates removed:", totalRaw - uniqueData.length);
 
         isLoading = false;
-        showMessage(`✅ Đã tải ${uniqueData.length} khách hàng duy nhất (từ ${newDataArray.length} new + ${updateDataArray.length} bc_loyalty + ${oldDataArray.length} old). Hãy nhập từ khóa để tìm kiếm.`);
-        
-    } catch (error) {
-        isLoading = false;
-        showMessage("❌ Lỗi khi tải dữ liệu. Vui lòng thử lại sau.");
-        console.error("Load error:", error);
-    }
-}
-
-/* ===== POPULATE PROVINCE FILTER ===== */
-function populateProvinceFilter() {
-    const select = document.getElementById("provinceFilter");
-    const sortedProvinces = Array.from(allProvinces).sort();
-    
-    select.innerHTML = '<option value="all">-- Tất cả tỉnh thành --</option>';
-    
-    sortedProvinces.forEach(province => {
-        const option = document.createElement("option");
-        option.value = province;
-        option.textContent = province;
-        select.appendChild(option);
-    });
-}
-
-/* ===== RENDER TABLE ===== */
-function render(keyword = "") {
-    const tbody = document.getElementById("tbody");
-    const statsDiv = document.getElementById("stats");
-    
-    if (isLoading) {
-        return;
-    }
-
-    if (!keyword.trim()) {
-        tbody.innerHTML = '<tr><td colspan="9" class="no-results">👆 Nhập từ khóa để bắt đầu tìm kiếm</td></tr>';
-        statsDiv.style.display = "none";
-        return;
-    }
-
-    const kw = keyword.toLowerCase().trim();
-    const fragment = document.createDocumentFragment();
-    let count = 0;
-    
-    const stats = {
-        'approved-2026': 0,
-        'pending-2026': 0,
-        'error-2026': 0,
-        'new-2025-only': 0,
-        'old-2025-no-2026': 0
-    };
-
-    for (const data of uniqueData) {
-        if (!data._search.includes(kw)) continue;
-
-        const statusInfo = determineCustomerStatus(data);
-        const tinh = normalizeValue(data["Tỉnh"]);
-        
-        // Apply status filter
-        if (currentFilter !== 'all' && statusInfo.status !== currentFilter) continue;
-        
-        // Apply province filter
-        if (currentProvince !== 'all' && tinh !== currentProvince) continue;
-
-        const tr = document.createElement("tr");
-        tr.className = statusInfo.status;
-        
-        stats[statusInfo.status]++;
-
-        const maKH = normalizeValue(data["Mã KH"]);
-        const sdt = normalizeValue(data["Số điện thoại di động"]);
-        const khachHang = normalizeValue(data["KH"]);
-        const tdvName = normalizeValue(data["TDV"]);
-        const imageUrl = data._imageUrl || "";
-        
-        const statusCellClass = imageUrl ? 'clickable-status' : '';
-        const statusCellOnClick = imageUrl ? `onclick="openImageModal('${imageUrl}', '${khachHang}')"` : '';
-
-        tr.innerHTML = `
-            <td>${maKH}</td>
-            <td>${khachHang}</td>
-            <td>${tinh}</td>
-            <td>${sdt}</td>
-            <td>${tdvName}</td>
-            <td>${statusInfo.status2025}</td>
-            <td>${statusInfo.status2026}</td>
-            <td>${statusInfo.note}</td>
-            <td class="status-${statusInfo.status.replace(/-/g, '-')} ${statusCellClass}" ${statusCellOnClick} title="${imageUrl ? 'Click để xem hình ảnh' : ''}">${statusInfo.display}</td>
-        `;
-
-        fragment.appendChild(tr);
-        count++;
-        
-        if (count >= MAX_RENDER) break;
-    }
-
-    if (count === 0) {
-        tbody.innerHTML = '<tr><td colspan="9" class="no-results">🔍 Không tìm thấy kết quả phù hợp</td></tr>';
-        statsDiv.style.display = "none";
-    } else {
-        tbody.innerHTML = "";
-        tbody.appendChild(fragment);
-        
-        const filterText = currentFilter === 'all' ? '' : ` (Lọc: ${document.querySelector(`#status-${currentFilter.split('-')[0]}`).nextElementSibling.textContent})`;
-        const provinceText = currentProvince !== 'all' ? ` - Tỉnh: ${currentProvince}` : '';
-        
-        statsDiv.innerHTML = `
-            📊 Tìm thấy <strong>${count}</strong> kết quả${filterText}${provinceText}<br>
-            ✅ Đã ký 2026 & Duyệt: <strong>${stats['approved-2026']}</strong> | 
-            ⏳ Đã ký 2026 chưa duyệt: <strong>${stats['pending-2026']}</strong> | 
-            ❌ Đã ký 2026 bị lỗi: <strong>${stats['error-2026']}</strong><br>
-            🆕 Mới ký 2025: <strong>${stats['new-2025-only']}</strong> | 
-            ⚠️ Đã ký 2025 chưa ký 2026: <strong>${stats['old-2025-no-2026']}</strong>
-            ${count >= MAX_RENDER ? ` (Hiển thị tối đa ${MAX_RENDER} kết quả)` : ''}
-        `;
-        statsDiv.style.display = "block";
-    }
-}
-
-/* ===== SHOW MESSAGE ===== */
-function showMessage(msg) {
-    const tbody = document.getElementById("tbody");
-    tbody.innerHTML = `<tr><td colspan="9" class="loading">${msg}</td></tr>`;
-}
-
-/* ===== SEARCH WITH DEBOUNCE ===== */
-document.getElementById("searchInput").addEventListener("input", e => {
-    clearTimeout(debounceTimer);
-    const value = e.target.value;
-    debounceTimer = setTimeout(() => render(value), 250);
-});
-
-/* ===== STATUS FILTER ===== */
-document.querySelectorAll('input[name="statusFilter"]').forEach(radio => {
-    radio.addEventListener('change', e => {
-        currentFilter = e.target.value;
-        const keyword = document.getElementById("searchInput").value;
-        render(keyword);
-    });
-});
-
-/* ===== PROVINCE FILTER ===== */
-document.getElementById("provinceFilter").addEventListener('change', e => {
-    currentProvince = e.target.value;
-    const keyword = document.getElementById("searchInput").value;
-    render(keyword);
-});
-
-/* ===== CLEAR ALL FILTERS ===== */
-document.getElementById("clearFilters").addEventListener('click', () => {
-    document.getElementById("status-all").checked = true;
-    currentFilter = 'all';
-    
-    document.getElementById("provinceFilter").value = 'all';
-    currentProvince = 'all';
-    
-    document.getElementById("searchInput").value = '';
-    
-    render('');
-});
-
-document.getElementById("searchInput").focus();
-
-loadData();
-</script>
-
-</body>
-</html>
+        showMessage(`✅ Đã tải ${uniqueData.length} khách hàng duy nhất (từ ${newDataArray.length} new + ${updateDataArray.length} bc_loyalty
