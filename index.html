@@ -576,7 +576,7 @@ function determineCustomerStatus(data) {
         // Khách hàng từ bc_loyalty: có thể là mới ký 2025 hoặc đã ký 2026 chưa duyệt
         const formType = normalizeValue(data["Cột A"] || data["Form"] || "");
         
-        if (formType.includes("FM2601")) {
+        if (formType.includes("FM2601_Upload Thoa thuan CT Vung tin gang ket 2026")) {
             // Đã đăng ký 2026 nhưng chưa được duyệt
             return {
                 status: "pending-2026",
@@ -585,7 +585,7 @@ function determineCustomerStatus(data) {
                 status2026: "Đã ký 2026 - CHƯA DUYỆT",
                 note: ""
             };
-        } else if (formType.includes("FM2501")) {
+        } else if (formType.includes("FM2501_Upload Thoa thuan CT Vung tin gang ket 2025")) {
             // Mới đăng ký 2025, chưa đăng ký 2026
             return {
                 status: "new-2025-only",
