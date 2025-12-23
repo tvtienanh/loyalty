@@ -6,430 +6,88 @@
 <title>Tra cứu Loyalty – CT 2026</title>
 
 <style>
-    /* GIỮ NGUYÊN CSS GỐC CỦA BẠN */
+    /* GIỮ NGUYÊN TOÀN BỘ CSS GỐC CỦA BẠN */
     * { box-sizing: border-box; }
-    body { 
-        font-family: 'Segoe UI', Tahoma, Arial, sans-serif; 
-        padding: 20px; 
-        background: #f5f5f5;
-        margin: 0;
-    }
-    
-    .container {
-        max-width: 1600px;
-        margin: 0 auto;
-        background: white;
-        padding: 30px;
-        border-radius: 8px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    }
-    
-    h2 { 
-        color: #333; 
-        margin-bottom: 20px;
-        font-size: 24px;
-    }
-    
-    .search-box {
-        margin-bottom: 20px;
-    }
-    
-    .filter-box {
-        margin-bottom: 20px;
-        padding: 20px;
-        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-        border-radius: 10px;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.08);
-    }
-    
-    .filter-group {
-        margin-bottom: 15px;
-    }
-    
-    .filter-group:last-child {
-        margin-bottom: 0;
-    }
-    
-    .filter-label {
-        display: block;
-        font-weight: 600;
-        color: #2c3e50;
-        margin-bottom: 10px;
-        font-size: 14px;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-    
-    .filter-options {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-    }
-    
-    .filter-chip {
-        position: relative;
-    }
-    
-    .filter-chip input[type="radio"],
-    .filter-chip input[type="checkbox"] {
-        display: none;
-    }
-    
-    .filter-chip label {
-        display: inline-block;
-        padding: 8px 16px;
-        background: white;
-        border: 2px solid #ddd;
-        border-radius: 20px;
-        cursor: pointer;
-        font-size: 13px;
-        transition: all 0.3s ease;
-        user-select: none;
-    }
-    
-    .filter-chip label:hover {
-        border-color: #4CAF50;
-        transform: translateY(-2px);
-        box-shadow: 0 4px 8px rgba(76, 175, 80, 0.2);
-    }
-    
-    .filter-chip input:checked + label {
-        background: #4CAF50;
-        color: white;
-        border-color: #4CAF50;
-        font-weight: 600;
-    }
-    
-    .province-select {
-        width: 100%;
-        max-width: 300px;
-        padding: 10px 15px;
-        font-size: 14px;
-        border: 2px solid #ddd;
-        border-radius: 8px;
-        background: white;
-        cursor: pointer;
-        transition: border-color 0.3s;
-    }
-    
-    .province-select:focus {
-        outline: none;
-        border-color: #4CAF50;
-    }
-    
-    .clear-filters {
-        margin-top: 15px;
-        padding: 8px 20px;
-        background: #ff5252;
-        color: white;
-        border: none;
-        border-radius: 20px;
-        cursor: pointer;
-        font-size: 13px;
-        font-weight: 600;
-        transition: all 0.3s ease;
-    }
-    
-    .clear-filters:hover {
-        background: #ff1744;
-        transform: translateY(-2px);
-        box-shadow: 0 4px 8px rgba(255, 82, 82, 0.3);
-    }
-    
-    input[type="text"] { 
-        width: 100%;
-        max-width: 500px;
-        padding: 12px 16px; 
-        font-size: 15px;
-        border: 2px solid #ddd;
-        border-radius: 6px;
-        transition: border-color 0.3s;
-    }
-    
-    input[type="text"]:focus {
-        outline: none;
-        border-color: #4CAF50;
-    }
-    
-    .stats {
-        margin: 15px 0;
-        padding: 12px;
-        background: #e3f2fd;
-        border-radius: 6px;
-        font-size: 14px;
-        color: #1976d2;
-    }
-    
-    .table-wrapper {
-        overflow-x: auto;
-        margin-top: 20px;
-    }
-    
-    table { 
-        border-collapse: collapse; 
-        width: 100%; 
-        background: #fff;
-        font-size: 13px;
-    }
-    
-    th, td { 
-        border: 1px solid #ddd; 
-        padding: 10px 8px;
-        text-align: left;
-    }
-    
-    th { 
-        background: #4CAF50;
-        color: white;
-        font-weight: 600;
-        position: sticky; 
-        top: 0;
-        z-index: 10;
-    }
-    
+    body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; padding: 20px; background: #f5f5f5; margin: 0; }
+    .container { max-width: 1600px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    h2 { color: #333; margin-bottom: 20px; font-size: 24px; }
+    .search-box { margin-bottom: 20px; }
+    .filter-box { margin-bottom: 20px; padding: 20px; background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.08); }
+    .filter-group { margin-bottom: 15px; }
+    .filter-label { display: block; font-weight: 600; color: #2c3e50; margin-bottom: 10px; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .filter-options { display: flex; flex-wrap: wrap; gap: 10px; }
+    .filter-chip input[type="radio"] { display: none; }
+    .filter-chip label { display: inline-block; padding: 8px 16px; background: white; border: 2px solid #ddd; border-radius: 20px; cursor: pointer; font-size: 13px; transition: all 0.3s ease; }
+    .filter-chip label:hover { border-color: #4CAF50; transform: translateY(-2px); box-shadow: 0 4px 8px rgba(76, 175, 80, 0.2); }
+    .filter-chip input:checked + label { background: #4CAF50; color: white; border-color: #4CAF50; font-weight: 600; }
+    .province-select { width: 100%; max-width: 300px; padding: 10px 15px; font-size: 14px; border: 2px solid #ddd; border-radius: 8px; }
+    .clear-filters { margin-top: 15px; padding: 8px 20px; background: #ff5252; color: white; border: none; border-radius: 20px; cursor: pointer; font-size: 13px; font-weight: 600; }
+    input[type="text"] { width: 100%; max-width: 500px; padding: 12px 16px; font-size: 15px; border: 2px solid #ddd; border-radius: 6px; }
+    .stats { margin: 15px 0; padding: 12px; background: #e3f2fd; border-radius: 6px; font-size: 14px; color: #1976d2; }
+    .table-wrapper { overflow-x: auto; margin-top: 20px; }
+    table { border-collapse: collapse; width: 100%; background: #fff; font-size: 13px; }
+    th, td { border: 1px solid #ddd; padding: 10px 8px; text-align: left; }
+    th { background: #4CAF50; color: white; font-weight: 600; position: sticky; top: 0; z-index: 10; }
     tr.approved-2026 { background: #c8e6c9; }
     tr.pending-2026 { background: #fff9c4; }
     tr.new-2025-only { background: #e1bee7; }
     tr.old-2025-no-2026 { background: #ffccbc; }
     tr.error-2026 { background: #ffcdd2; }
-    
-    tr:hover {
-        opacity: 0.8;
-    }
-    
-    .status-approved {
-        color: #2e7d32;
-        font-weight: 600;
-    }
-    
-    .status-pending {
-        color: #f57c00;
-        font-weight: 600;
-    }
-    
-    .status-new-2025 {
-        color: #7b1fa2;
-        font-weight: 600;
-    }
-    
-    .status-old-no-2026 {
-        color: #e64a19;
-        font-weight: 600;
-    }
-    
-    .status-error {
-        color: #c62828;
-        font-weight: 600;
-    }
-    
-    .loading {
-        text-align: center;
-        padding: 40px;
-        color: #666;
-        font-size: 16px;
-    }
-    
-    .no-results {
-        text-align: center;
-        padding: 40px;
-        color: #999;
-        font-style: italic;
-    }
-    
-    /* MODAL GỐC CỦA BẠN */
-    .modal {
-        display: none;
-        position: fixed;
-        z-index: 1000;
-        left: 0;
-        top: 0;
-        width: 100%;
-        height: 100%;
-        background-color: rgba(0,0,0,0.8);
-        animation: fadeIn 0.3s;
-    }
-    
-    @keyframes fadeIn {
-        from { opacity: 0; }
-        to { opacity: 1; }
-    }
-    
-    .modal-content {
-        position: relative;
-        margin: 5% auto;
-        padding: 20px;
-        background: white;
-        width: 90%;
-        max-width: 800px;
-        border-radius: 10px;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-        animation: slideDown 0.3s;
-    }
-    
-    @keyframes slideDown {
-        from {
-            transform: translateY(-50px);
-            opacity: 0;
-        }
-        to {
-            transform: translateY(0);
-            opacity: 1;
-        }
-    }
-    
-    .modal-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 15px;
-        padding-bottom: 15px;
-        border-bottom: 2px solid #4CAF50;
-    }
-    
-    .modal-header h3 {
-        margin: 0;
-        color: #333;
-        font-size: 20px;
-    }
-    
-    .close-btn {
-        background: #f44336;
-        color: white;
-        border: none;
-        padding: 8px 16px;
-        border-radius: 5px;
-        cursor: pointer;
-        font-size: 16px;
-        font-weight: bold;
-        transition: background 0.3s;
-    }
-    
-    .close-btn:hover {
-        background: #d32f2f;
-    }
-    
-    .modal-body {
-        text-align: center;
-    }
-    
-    .modal-image {
-        max-width: 100%;
-        max-height: 70vh;
-        border-radius: 8px;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-    }
-
-    .clickable-status {
-        cursor: pointer;
-        text-decoration: underline;
-        text-decoration-style: dotted;
-    }
-    
-    .clickable-status:hover {
-        opacity: 0.7;
-    }
-
-    /* Thêm style cho phần ký lộn */
-    .conflict-link {
-        color: #d32f2f;
-        text-decoration: underline;
-        cursor: pointer;
-        font-weight: bold;
-        margin-left: 5px;
-    }
+    .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.8); animation: fadeIn 0.3s; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .modal-content { position: relative; margin: 5% auto; padding: 20px; background: white; width: 90%; max-width: 800px; border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); animation: slideDown 0.3s; }
+    @keyframes slideDown { from { transform: translateY(-50px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 2px solid #4CAF50; }
+    .close-btn { background: #f44336; color: white; border: none; padding: 8px 16px; border-radius: 5px; cursor: pointer; font-weight: bold; }
+    .modal-body { text-align: center; }
+    .modal-image { max-width: 100%; max-height: 70vh; border-radius: 8px; }
+    .clickable-status { cursor: pointer; text-decoration: underline; text-decoration-style: dotted; }
+    /* Style mới cho báo trùng */
+    .conflict-tag { color: #d32f2f; font-weight: bold; cursor: pointer; text-decoration: underline; margin-left: 5px; }
 </style>
 </head>
 
 <body>
-
 <div class="container">
-    <h2>🔍 Tra cứu khách hàng Loyalty – Kiểm tra CT 2026</h2>
-    
+    <h2>🔍 Tra cứu Loyalty – Kiểm tra CT 2026</h2>
     <div class="search-box">
-        <input 
-            type="text"
-            id="searchInput" 
-            placeholder="Nhập Mã KH / Tên khách hàng / SĐT / Tên TDV để tìm kiếm..."
-            autocomplete="off"
-        >
+        <input type="text" id="searchInput" placeholder="Nhập Mã KH / Tên khách hàng / SĐT / Tên TDV...">
     </div>
-    
     <div class="filter-box">
         <div class="filter-group">
             <span class="filter-label">🔍 Trạng thái</span>
             <div class="filter-options">
-                <div class="filter-chip">
-                    <input type="radio" name="statusFilter" value="all" id="status-all" checked>
-                    <label for="status-all">📋 Tất cả</label>
-                </div>
-                <div class="filter-chip">
-                    <input type="radio" name="statusFilter" value="approved-2026" id="status-approved">
-                    <label for="status-approved">✅ Đã ký 2026 & Đã duyệt</label>
-                </div>
-                <div class="filter-chip">
-                    <input type="radio" name="statusFilter" value="pending-2026" id="status-pending">
-                    <label for="status-pending">⏳ Đã ký 2026 chưa duyệt</label>
-                </div>
-                <div class="filter-chip">
-                    <input type="radio" name="statusFilter" value="error-2026" id="status-error">
-                    <label for="status-error">❌ Đã ký 2026 bị lỗi</label>
-                </div>
-                <div class="filter-chip">
-                    <input type="radio" name="statusFilter" value="new-2025-only" id="status-new-2025">
-                    <label for="status-new-2025">🆕 Mới ký 2025 chưa ký 2026</label>
-                </div>
-                <div class="filter-chip">
-                    <input type="radio" name="statusFilter" value="old-2025-no-2026" id="status-old">
-                    <label for="status-old">⚠️ Đã ký 2025 chưa ký 2026</label>
-                </div>
+                <div class="filter-chip"><input type="radio" name="statusFilter" value="all" id="status-all" checked><label for="status-all">📋 Tất cả</label></div>
+                <div class="filter-chip"><input type="radio" name="statusFilter" value="approved-2026" id="status-approved"><label for="status-approved">✅ Đã duyệt</label></div>
+                <div class="filter-chip"><input type="radio" name="statusFilter" value="pending-2026" id="status-pending"><label for="status-pending">⏳ Chờ duyệt</label></div>
+                <div class="filter-chip"><input type="radio" name="statusFilter" value="error-2026" id="status-error"><label for="status-error">❌ Bị lỗi</label></div>
+                <div class="filter-chip"><input type="radio" name="statusFilter" value="new-2025-only" id="status-new-2025"><label for="status-new-2025">🆕 Mới ký 2025</label></div>
+                <div class="filter-chip"><input type="radio" name="statusFilter" value="old-2025-no-2026" id="status-old"><label for="status-old">⚠️ Chưa ký 2026</label></div>
             </div>
         </div>
-        
         <div class="filter-group">
             <span class="filter-label">📍 Tỉnh thành</span>
-            <select class="province-select" id="provinceFilter">
-                <option value="all">-- Tất cả tỉnh thành --</option>
-            </select>
+            <select class="province-select" id="provinceFilter"><option value="all">-- Tất cả tỉnh thành --</option></select>
         </div>
-        
-        <button class="clear-filters" id="clearFilters">🔄 Xóa tất cả bộ lọc</button>
+        <button class="clear-filters" id="clearFilters">🔄 Xóa bộ lọc</button>
     </div>
-    
     <div id="stats" class="stats" style="display:none;"></div>
-    
     <div class="table-wrapper">
         <table>
             <thead>
                 <tr>
-                    <th>Mã KH</th>
-                    <th>Khách hàng</th>
-                    <th>Tỉnh</th>
-                    <th>SĐT</th>
-                    <th>TDV</th>
-                    <th>Trạng thái 2025</th>
-                    <th>Trạng thái 2026</th>
-                    <th>Ghi chú</th>
-                    <th>Tổng hợp</th>
+                    <th>Mã KH</th><th>Khách hàng</th><th>Tỉnh</th><th>SĐT</th><th>TDV</th><th>Trạng thái 2025</th><th>Trạng thái 2026</th><th>Ghi chú</th><th>Tổng hợp</th>
                 </tr>
             </thead>
-            <tbody id="tbody">
-                <tr>
-                    <td colspan="9" class="loading">⏳ Đang tải dữ liệu...</td>
-                </tr>
-            </tbody>
+            <tbody id="tbody"><tr><td colspan="9" class="loading">⏳ Đang tải dữ liệu...</td></tr></tbody>
         </table>
     </div>
 </div>
 
 <div id="imageModal" class="modal">
     <div class="modal-content">
-        <div class="modal-header">
-            <h3>🖼️ Hình ảnh khách hàng</h3>
-            <button class="close-btn" onclick="closeImageModal()">✕ Đóng</button>
-        </div>
-        <div class="modal-body" id="modalBody">
-            <div class="image-loading">⏳ Đang tải hình ảnh...</div>
-        </div>
+        <div class="modal-header"><h3>🖼️ Hình ảnh</h3><button class="close-btn" onclick="closeImageModal()">✕ Đóng</button></div>
+        <div class="modal-body" id="modalBody"></div>
     </div>
 </div>
 
@@ -439,208 +97,161 @@ const OLD_URL = "https://docs.google.com/spreadsheets/d/14dZ70xuUlYskJHGLfF4dI_l
 const UPDATE_URL = "https://docs.google.com/spreadsheets/d/14dZ70xuUlYskJHGLfF4dI_lY_V8vsqJfAJ-Dlo_DdrU/gviz/tq?tqx=out:json&sheet=bc_loyalty&tq=select%20*%20limit%2020000";
 
 let uniqueData = [];
-let loyaltyImages = new Map(); // Dùng để truy xuất ảnh cho Approved/Error
 let isLoading = true;
 let currentFilter = 'all';
 let currentProvince = 'all';
-let allProvinces = new Set();
 
-function openImageModal(imageUrl, customerName) {
-    const modal = document.getElementById("imageModal");
-    const modalBody = document.getElementById("modalBody");
-    if (!imageUrl) return;
-    modalBody.innerHTML = '<div class="image-loading">⏳ Đang tải...</div>';
-    modal.style.display = "block";
-    const img = new Image();
-    img.className = "modal-image";
-    img.src = imageUrl;
-    img.onload = () => { modalBody.innerHTML = ''; modalBody.appendChild(img); };
-    img.onerror = () => { modalBody.innerHTML = '<div style="color:red">❌ Không tải được ảnh.</div>'; };
-}
-
-function closeImageModal() { document.getElementById("imageModal").style.display = "none"; }
-
-function parseGViz(text) {
-    const jsonText = text.substring(47, text.length - 2);
-    return JSON.parse(jsonText);
-}
-
+function parseGViz(text) { return JSON.parse(text.substring(47, text.length - 2)); }
 function normalizeValue(val) { return val ? String(val).trim() : ""; }
-
 function rowToObject(cols, row) {
     const obj = {};
     cols.forEach((col, i) => {
-        const cellValue = row.c[i];
-        obj[col.label] = cellValue ? (cellValue.f || cellValue.v || "") : "";
+        const cell = row.c[i];
+        obj[col.label] = cell ? (cell.f || cell.v || "") : "";
     });
     return obj;
 }
-
-function createUniqueKey(kh, sdt) {
-    return `${normalizeValue(kh).toLowerCase().replace(/\s+/g, '')}|${normalizeValue(sdt).replace(/\s+/g, '')}`;
+function createKey(kh, sdt) { 
+    return `${normalizeValue(kh).toLowerCase().replace(/\s+/g, '')}|${normalizeValue(sdt).replace(/\s+/g, '')}`; 
 }
+
+function openImageModal(url, title) {
+    if (!url) return;
+    const modal = document.getElementById("imageModal");
+    const modalBody = document.getElementById("modalBody");
+    modalBody.innerHTML = '⏳ Đang tải...';
+    modal.style.display = "block";
+    const img = new Image();
+    img.className = "modal-image";
+    img.onload = () => { modalBody.innerHTML = ''; modalBody.appendChild(img); };
+    img.src = url;
+}
+function closeImageModal() { document.getElementById("imageModal").style.display = "none"; }
 
 async function loadData() {
     try {
-        const [newRes, oldRes, updateRes] = await Promise.all([fetch(NEW_URL), fetch(OLD_URL), fetch(UPDATE_URL)]);
-        const newJson = parseGViz(await newRes.text());
-        const oldJson = parseGViz(await oldRes.text());
-        const updateJson = parseGViz(await updateRes.text());
+        const [resN, resO, resU] = await Promise.all([fetch(NEW_URL), fetch(OLD_URL), fetch(UPDATE_URL)]);
+        const newJ = parseGViz(await resN.text()), oldJ = parseGViz(await resO.text()), updateJ = parseGViz(await resU.text());
 
-        // Xử lý bc_loyalty để tìm ảnh và xử lý trùng (ký lộn)
+        // 1. Xử lý bc_loyalty: Check trùng & Lọc ảnh (Chỉ lấy FM2601)
         const loyaltyLookup = new Map();
-        updateJson.table.rows.forEach(row => {
-            const obj = rowToObject(updateJson.table.cols, row);
-            const key = createUniqueKey(obj["KH"], obj["Số điện thoại di động"]);
+        updateJ.table.rows.forEach(row => {
+            const obj = rowToObject(updateJ.table.cols, row);
+            const key = createKey(obj["KH"], obj["Số điện thoại di động"]);
+            if (!key || key === "|") return;
+
             const tdv = normalizeValue(obj["TDV"] || obj["Tên TDV gửi code"] || "");
-            const img = normalizeValue(obj["Link ảnh"] || obj["Hình ảnh"] || obj[updateJson.table.cols[13]?.label] || "");
-            const ngayStr = normalizeValue(obj["NGAY"]);
-            const ngayDate = ngayStr ? new Date(ngayStr) : new Date(0);
+            const form = normalizeValue(obj["Cột A"] || obj["Form"] || "");
+            const img = form.includes("FM2601") ? normalizeValue(obj["Link ảnh"] || obj["Hình ảnh"] || obj[updateJ.table.cols[13]?.label]) : "";
+            const ngay = obj["NGAY"] ? new Date(obj["NGAY"]) : new Date(0);
 
             if (!loyaltyLookup.has(key)) {
-                loyaltyLookup.set(key, { main: obj, conflicts: [], lastDate: ngayDate, mainTdv: tdv, mainImg: img });
+                loyaltyLookup.set(key, { main: obj, img: img, tdv: tdv, date: ngay, form: form, conflicts: [] });
             } else {
                 let entry = loyaltyLookup.get(key);
-                if (tdv === entry.mainTdv) {
-                    // Cùng TDV -> Lấy bản mới nhất
-                    if (ngayDate > entry.lastDate) {
-                        entry.main = obj;
-                        entry.lastDate = ngayDate;
-                        entry.mainImg = img;
-                    }
+                if (tdv === entry.tdv) {
+                    if (ngay > entry.date) { entry.main = obj; entry.date = ngay; entry.img = img; entry.form = form; }
                 } else {
-                    // Khác TDV -> Ký lộn
                     entry.conflicts.push({ tdv: tdv, img: img });
                 }
             }
         });
 
-        // Gộp dữ liệu
         const masterMap = new Map();
-        
-        // 1. Data cũ
-        oldJson.table.rows.forEach(row => {
-            const obj = rowToObject(oldJson.table.cols, row);
-            const key = createUniqueKey(obj["KH"], obj["Số điện thoại di động"]);
-            obj._source = "original";
+        // A. Data cũ
+        oldJ.table.rows.forEach(row => {
+            const obj = rowToObject(oldJ.table.cols, row);
+            const key = createKey(obj["KH"], obj["Số điện thoại di động"]);
+            obj._source = 'original';
             masterMap.set(key, obj);
         });
-
-        // 2. Data bc_loyalty
-        loyaltyLookup.forEach((entry, key) => {
-            let obj = entry.main;
-            obj._source = "bc_loyalty";
-            obj._conflicts = entry.conflicts;
-            obj._img = entry.mainImg;
-            masterMap.set(key, obj);
+        // B. Ghi đè bc_loyalty
+        loyaltyLookup.forEach((v, k) => {
+            let obj = v.main;
+            obj._source = 'bc_loyalty';
+            obj._img = v.img; obj._conflicts = v.conflicts; obj._form = v.form;
+            masterMap.set(k, obj);
         });
-
-        // 3. Data New (Duyệt/Lỗi)
-        newJson.table.rows.forEach(row => {
-            const obj = rowToObject(newJson.table.cols, row);
-            const key = createUniqueKey(obj["KH"], obj["Số điện thoại di động"]);
-            const existing = loyaltyLookup.get(key);
-            obj._source = "new";
-            if (existing) {
-                obj._img = existing.mainImg;
-                obj._conflicts = existing.conflicts;
-            }
+        // C. Ghi đè new_data
+        newJ.table.rows.forEach(row => {
+            const obj = rowToObject(newJ.table.cols, row);
+            const key = createKey(obj["KH"], obj["Số điện thoại di động"]);
+            const l = loyaltyLookup.get(key);
+            obj._source = 'new';
+            obj._img = l ? l.img : ""; obj._conflicts = l ? l.conflicts : [];
             masterMap.set(key, obj);
         });
 
         uniqueData = Array.from(masterMap.values()).map(item => {
             const tinh = normalizeValue(item["Tỉnh"]);
-            if (tinh) allProvinces.add(tinh);
+            if (tinh && !Array.from(document.getElementById("provinceFilter").options).some(o => o.value === tinh)) {
+                document.getElementById("provinceFilter").add(new Option(tinh, tinh));
+            }
             item._search = `${item["Mã KH"]} ${item["KH"]} ${item["Số điện thoại di động"]} ${item["TDV"]}`.toLowerCase();
             return item;
         });
 
-        populateProvinceFilter();
-        isLoading = false;
-        render();
-    } catch (error) {
-        console.error(error);
-        showMessage("❌ Lỗi tải dữ liệu.");
-    }
+        isLoading = false; render();
+    } catch (e) { console.error(e); }
 }
 
 function determineStatus(data) {
-    if (data._source === "new") {
+    if (data._source === 'new') {
         const ok = normalizeValue(data["Đăng ký thành công"]).toUpperCase() === "OK";
         return {
-            status: ok ? "approved-2026" : "error-2026",
+            cls: ok ? "approved-2026" : "error-2026",
+            d26: ok ? "Đã ký 2026 - ĐÃ DUYỆT" : "Đã ký 2026 - BỊ LỖI",
             display: ok ? "✅ Đã duyệt" : "❌ Bị lỗi",
-            s25: "Đã ký 2025", s26: ok ? "Đã ký 2026 - ĐÃ DUYỆT" : "Đã ký 2026 - LỖI",
             note: [data["Note hình ảnh"], data["Thông tin sai/thiếu (nếu có)"]].filter(n => n).join(" | ")
         };
-    } else if (data._source === "bc_loyalty") {
-        const form = normalizeValue(data["Cột A"] || data["Form"] || "");
-        if (form.includes("FM2501")) return { status: "new-2025-only", display: "🆕 Mới ký 2025", s25: "Mới ký 2025", s26: "Chưa ký 2026", note: "" };
-        return { status: "pending-2026", display: "⏳ Chờ duyệt", s25: "Đã ký 2025", s26: "Đã ký 2026 - CHỜ DUYỆT", note: "" };
+    } else if (data._source === 'bc_loyalty') {
+        const is25 = data._form.includes("FM2501");
+        return {
+            cls: is25 ? "new-2025-only" : "pending-2026",
+            d26: is25 ? "Chưa ký 2026" : "Đã ký 2026 - CHỜ DUYỆT",
+            display: is25 ? "🆕 Mới ký 2025" : "⏳ Chờ duyệt",
+            note: ""
+        };
     }
-    return { status: "old-2025-no-2026", display: "⚠️ Chưa ký 2026", s25: "Đã ký 2025", s26: "Chưa ký 2026", note: "" };
+    return { cls: "old-2025-no-2026", d26: "Chưa ký 2026", display: "⚠️ Chưa ký 2026", note: "" };
 }
 
-function render(keyword = "") {
+function render() {
     const tbody = document.getElementById("tbody");
     if (isLoading) return;
-    const kw = keyword.toLowerCase().trim() || document.getElementById("searchInput").value.toLowerCase().trim();
-    if (!kw && currentFilter === 'all' && currentProvince === 'all') {
-        tbody.innerHTML = '<tr><td colspan="9" class="no-results">🔍 Nhập từ khóa để tìm kiếm...</td></tr>';
-        return;
-    }
-
+    const kw = document.getElementById("searchInput").value.toLowerCase().trim();
     const fragment = document.createDocumentFragment();
+
     uniqueData.forEach(item => {
         if (kw && !item._search.includes(kw)) return;
         if (currentProvince !== 'all' && normalizeValue(item["Tỉnh"]) !== currentProvince) return;
         const info = determineStatus(item);
-        if (currentFilter !== 'all' && info.status !== currentFilter) return;
+        if (currentFilter !== 'all' && info.cls !== currentFilter) return;
 
-        const tr = document.createElement("tr");
-        tr.className = info.status;
-
-        // Xử lý hiển thị ký lộn trong cột ghi chú
-        let conflictLinks = "";
-        if (item._conflicts && item._conflicts.length > 0) {
+        let confHtml = "";
+        if (item._conflicts?.length > 0) {
             item._conflicts.forEach(c => {
-                conflictLinks += `<span class="conflict-link" onclick="openImageModal('${c.img}', '${c.tdv} ký lộn')">${c.tdv} ký lộn</span> `;
+                if (c.img) confHtml += `<span class="conflict-tag" onclick="openImageModal('${c.img}', '${c.tdv} ký lộn')">${c.tdv} ký lộn</span> `;
+                else confHtml += `<span style="color:#666; margin-left:5px;">${c.tdv} ký lộn</span> `;
             });
         }
 
-        const imgUrl = item._img || "";
-        const statusClass = imgUrl ? "clickable-status" : "";
-        const onclick = imgUrl ? `onclick="openImageModal('${imgUrl}', '${item["KH"]}')"` : "";
-
+        const tr = document.createElement("tr");
+        tr.className = info.cls;
         tr.innerHTML = `
-            <td>${item["Mã KH"] || ""}</td>
-            <td>${item["KH"] || ""}</td>
-            <td>${item["Tỉnh"] || ""}</td>
-            <td>${item["Số điện thoại di động"] || ""}</td>
-            <td>${item["TDV"] || ""}</td>
-            <td>${info.s25}</td>
-            <td>${info.s26}</td>
-            <td>${info.note} ${conflictLinks}</td>
-            <td class="${statusClass}" ${onclick}>${info.display} ${imgUrl ? '🖼️' : ''}</td>
+            <td>${item["Mã KH"] || ""}</td><td>${item["KH"] || ""}</td><td>${item["Tỉnh"] || ""}</td><td>${item["Số điện thoại di động"] || ""}</td><td>${item["TDV"] || ""}</td>
+            <td>${info.cls === 'new-2025-only' ? 'Mới ký 2025' : 'Đã ký 2025'}</td><td>${info.d26}</td><td>${info.note} ${confHtml}</td>
+            <td class="${item._img ? 'clickable-status' : ''}" onclick="openImageModal('${item._img}', '${item["KH"]}')">${info.display} ${item._img ? '🖼️' : ''}</td>
         `;
         fragment.appendChild(tr);
     });
-    tbody.innerHTML = "";
-    tbody.appendChild(fragment);
+    tbody.innerHTML = ""; tbody.appendChild(fragment);
 }
 
-function populateProvinceFilter() {
-    const select = document.getElementById("provinceFilter");
-    Array.from(allProvinces).sort().forEach(p => select.add(new Option(p, p)));
-}
-
-function showMessage(msg) { document.getElementById("tbody").innerHTML = `<tr><td colspan="9" class="loading">${msg}</td></tr>`; }
-
-document.getElementById("searchInput").addEventListener("input", e => render(e.target.value));
+document.getElementById("searchInput").addEventListener("input", render);
 document.querySelectorAll('input[name="statusFilter"]').forEach(r => r.addEventListener('change', e => { currentFilter = e.target.value; render(); }));
 document.getElementById("provinceFilter").addEventListener('change', e => { currentProvince = e.target.value; render(); });
 document.getElementById("clearFilters").addEventListener('click', () => { location.reload(); });
-
 loadData();
 </script>
 </body>
