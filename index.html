@@ -45,6 +45,10 @@
         margin-bottom: 15px;
     }
     
+    .filter-group:last-child {
+        margin-bottom: 0;
+    }
+    
     .filter-label {
         display: block;
         font-weight: 600;
@@ -61,7 +65,12 @@
         gap: 10px;
     }
     
-    .filter-chip input[type="radio"] {
+    .filter-chip {
+        position: relative;
+    }
+    
+    .filter-chip input[type="radio"],
+    .filter-chip input[type="checkbox"] {
         display: none;
     }
     
@@ -74,6 +83,13 @@
         cursor: pointer;
         font-size: 13px;
         transition: all 0.3s ease;
+        user-select: none;
+    }
+    
+    .filter-chip label:hover {
+        border-color: #4CAF50;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(76, 175, 80, 0.2);
     }
     
     .filter-chip input:checked + label {
@@ -87,8 +103,36 @@
         width: 100%;
         max-width: 300px;
         padding: 10px 15px;
-        border-radius: 8px;
+        font-size: 14px;
         border: 2px solid #ddd;
+        border-radius: 8px;
+        background: white;
+        cursor: pointer;
+        transition: border-color 0.3s;
+    }
+    
+    .province-select:focus {
+        outline: none;
+        border-color: #4CAF50;
+    }
+    
+    .clear-filters {
+        margin-top: 15px;
+        padding: 8px 20px;
+        background: #ff5252;
+        color: white;
+        border: none;
+        border-radius: 20px;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 600;
+        transition: all 0.3s ease;
+    }
+    
+    .clear-filters:hover {
+        background: #ff1744;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(255, 82, 82, 0.3);
     }
     
     input[type="text"] { 
@@ -98,6 +142,12 @@
         font-size: 15px;
         border: 2px solid #ddd;
         border-radius: 6px;
+        transition: border-color 0.3s;
+    }
+    
+    input[type="text"]:focus {
+        outline: none;
+        border-color: #4CAF50;
     }
     
     .stats {
@@ -117,6 +167,7 @@
     table { 
         border-collapse: collapse; 
         width: 100%; 
+        background: #fff;
         font-size: 13px;
     }
     
@@ -129,8 +180,10 @@
     th { 
         background: #4CAF50;
         color: white;
+        font-weight: 600;
         position: sticky; 
         top: 0;
+        z-index: 10;
     }
     
     tr.approved-2026 { background: #c8e6c9; }
@@ -139,59 +192,151 @@
     tr.old-2025-no-2026 { background: #ffccbc; }
     tr.error-2026 { background: #ffcdd2; }
     
-    .status-approved { color: #2e7d32; font-weight: 600; }
-    .status-pending { color: #f57c00; font-weight: 600; }
-    .status-error { color: #c62828; font-weight: 600; }
-    
-    .conflict-tag {
-        display: inline-block;
-        background: #ff5252;
-        color: white;
-        padding: 2px 6px;
-        border-radius: 4px;
-        font-size: 11px;
-        cursor: pointer;
-        margin-left: 5px;
-        text-decoration: none;
+    tr:hover {
+        opacity: 0.8;
     }
     
-    .conflict-tag:hover { background: #d32f2f; }
-
-    .clickable-status {
-        cursor: pointer;
-        text-decoration: underline;
-        text-decoration-style: dotted;
+    .status-approved {
+        color: #2e7d32;
+        font-weight: 600;
     }
-
-    /* Modal */
+    
+    .status-pending {
+        color: #f57c00;
+        font-weight: 600;
+    }
+    
+    .status-new-2025 {
+        color: #7b1fa2;
+        font-weight: 600;
+    }
+    
+    .status-old-no-2026 {
+        color: #e64a19;
+        font-weight: 600;
+    }
+    
+    .status-error {
+        color: #c62828;
+        font-weight: 600;
+    }
+    
+    .loading {
+        text-align: center;
+        padding: 40px;
+        color: #666;
+        font-size: 16px;
+    }
+    
+    .no-results {
+        text-align: center;
+        padding: 40px;
+        color: #999;
+        font-style: italic;
+    }
+    
+    /* Modal/Popup styles */
     .modal {
         display: none;
         position: fixed;
         z-index: 1000;
-        left: 0; top: 0; width: 100%; height: 100%;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
         background-color: rgba(0,0,0,0.8);
+        animation: fadeIn 0.3s;
+    }
+    
+    @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
     }
     
     .modal-content {
+        position: relative;
         margin: 5% auto;
         padding: 20px;
         background: white;
         width: 90%;
         max-width: 800px;
         border-radius: 10px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        animation: slideDown 0.3s;
+    }
+    
+    @keyframes slideDown {
+        from {
+            transform: translateY(-50px);
+            opacity: 0;
+        }
+        to {
+            transform: translateY(0);
+            opacity: 1;
+        }
     }
     
     .modal-header {
         display: flex;
         justify-content: space-between;
         align-items: center;
+        margin-bottom: 15px;
+        padding-bottom: 15px;
         border-bottom: 2px solid #4CAF50;
-        padding-bottom: 10px;
     }
     
-    .modal-body { text-align: center; padding: 20px; }
-    .modal-image { max-width: 100%; max-height: 70vh; border-radius: 8px; }
-    .close-btn { background: #f44336; color: white; border: none; padding: 8px 16px; border-radius: 5px; cursor: pointer; }
+    .modal-header h3 {
+        margin: 0;
+        color: #333;
+        font-size: 20px;
+    }
+    
+    .close-btn {
+        background: #f44336;
+        color: white;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 16px;
+        font-weight: bold;
+        transition: background 0.3s;
+    }
+    
+    .close-btn:hover {
+        background: #d32f2f;
+    }
+    
+    .modal-body {
+        text-align: center;
+    }
+    
+    .modal-image {
+        max-width: 100%;
+        max-height: 70vh;
+        border-radius: 8px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+    }
+    
+    .image-loading {
+        padding: 40px;
+        color: #666;
+    }
+    
+    .image-error {
+        padding: 40px;
+        color: #f44336;
+    }
+    
+    .clickable-status {
+        cursor: pointer;
+        text-decoration: underline;
+        text-decoration-style: dotted;
+    }
+    
+    .clickable-status:hover {
+        opacity: 0.7;
+    }
 </style>
 </head>
 
@@ -201,7 +346,12 @@
     <h2>🔍 Tra cứu khách hàng Loyalty – Kiểm tra CT 2026</h2>
     
     <div class="search-box">
-        <input type="text" id="searchInput" placeholder="Nhập Mã KH / Tên khách hàng / SĐT / Tên TDV..." autocomplete="off">
+        <input 
+            type="text"
+            id="searchInput" 
+            placeholder="Nhập Mã KH / Tên khách hàng / SĐT / Tên TDV để tìm kiếm..."
+            autocomplete="off"
+        >
     </div>
     
     <div class="filter-box">
@@ -214,15 +364,23 @@
                 </div>
                 <div class="filter-chip">
                     <input type="radio" name="statusFilter" value="approved-2026" id="status-approved">
-                    <label for="status-approved">✅ Đã duyệt</label>
+                    <label for="status-approved">✅ Đã ký 2026 & Đã duyệt</label>
                 </div>
                 <div class="filter-chip">
                     <input type="radio" name="statusFilter" value="pending-2026" id="status-pending">
-                    <label for="status-pending">⏳ Chờ duyệt</label>
+                    <label for="status-pending">⏳ Đã ký 2026 chưa duyệt</label>
                 </div>
                 <div class="filter-chip">
                     <input type="radio" name="statusFilter" value="error-2026" id="status-error">
-                    <label for="status-error">❌ Bị lỗi</label>
+                    <label for="status-error">❌ Đã ký 2026 bị lỗi</label>
+                </div>
+                <div class="filter-chip">
+                    <input type="radio" name="statusFilter" value="new-2025-only" id="status-new-2025">
+                    <label for="status-new-2025">🆕 Mới ký 2025 chưa ký 2026</label>
+                </div>
+                <div class="filter-chip">
+                    <input type="radio" name="statusFilter" value="old-2025-no-2026" id="status-old">
+                    <label for="status-old">⚠️ Đã ký 2025 chưa ký 2026</label>
                 </div>
             </div>
         </div>
@@ -234,7 +392,7 @@
             </select>
         </div>
         
-        <button style="margin-top:10px; cursor:pointer;" id="clearFilters">🔄 Xóa bộ lọc</button>
+        <button class="clear-filters" id="clearFilters">🔄 Xóa tất cả bộ lọc</button>
     </div>
     
     <div id="stats" class="stats" style="display:none;"></div>
@@ -255,19 +413,24 @@
                 </tr>
             </thead>
             <tbody id="tbody">
-                <tr><td colspan="9" style="text-align:center; padding:40px;">⏳ Đang tải dữ liệu...</td></tr>
+                <tr>
+                    <td colspan="9" class="loading">⏳ Đang tải dữ liệu...</td>
+                </tr>
             </tbody>
         </table>
     </div>
 </div>
 
+<!-- Image Modal -->
 <div id="imageModal" class="modal">
     <div class="modal-content">
         <div class="modal-header">
-            <h3 id="modalTitle">🖼️ Hình ảnh khách hàng</h3>
+            <h3>🖼️ Hình ảnh khách hàng</h3>
             <button class="close-btn" onclick="closeImageModal()">✕ Đóng</button>
         </div>
-        <div class="modal-body" id="modalBody"></div>
+        <div class="modal-body" id="modalBody">
+            <div class="image-loading">⏳ Đang tải hình ảnh...</div>
+        </div>
     </div>
 </div>
 
@@ -276,249 +439,507 @@ const NEW_URL = "https://docs.google.com/spreadsheets/d/14dZ70xuUlYskJHGLfF4dI_l
 const OLD_URL = "https://docs.google.com/spreadsheets/d/14dZ70xuUlYskJHGLfF4dI_lY_V8vsqJfAJ-Dlo_DdrU/gviz/tq?tqx=out:json&sheet=original_data&tq=select%20*%20limit%2020000";
 const UPDATE_URL = "https://docs.google.com/spreadsheets/d/14dZ70xuUlYskJHGLfF4dI_lY_V8vsqJfAJ-Dlo_DdrU/gviz/tq?tqx=out:json&sheet=bc_loyalty&tq=select%20*%20limit%2020000";
 
+const MAX_RENDER = 10000;
+
 let uniqueData = [];
+let debounceTimer;
 let isLoading = true;
 let currentFilter = 'all';
 let currentProvince = 'all';
+let allProvinces = new Set();
 
-/* ===== UTILS ===== */
+/* ===== IMAGE MODAL FUNCTIONS ===== */
+function openImageModal(imageUrl, customerName) {
+    const modal = document.getElementById("imageModal");
+    const modalBody = document.getElementById("modalBody");
+    
+    if (!imageUrl) {
+        modalBody.innerHTML = '<div class="image-error">❌ Không có hình ảnh</div>';
+        modal.style.display = "block";
+        return;
+    }
+    
+    modalBody.innerHTML = '<div class="image-loading">⏳ Đang tải hình ảnh...</div>';
+    modal.style.display = "block";
+    
+    const img = new Image();
+    img.className = "modal-image";
+    img.onload = function() {
+        modalBody.innerHTML = '';
+        modalBody.appendChild(img);
+    };
+    img.onerror = function() {
+        modalBody.innerHTML = '<div class="image-error">❌ Không thể tải hình ảnh<br><small>' + imageUrl + '</small></div>';
+    };
+    img.src = imageUrl;
+}
+
+function closeImageModal() {
+    const modal = document.getElementById("imageModal");
+    modal.style.display = "none";
+}
+
+// Close modal when clicking outside
+window.onclick = function(event) {
+    const modal = document.getElementById("imageModal");
+    if (event.target === modal) {
+        closeImageModal();
+    }
+}
+
+// Close modal with ESC key
+document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape') {
+        closeImageModal();
+    }
+});
+
+/* ===== PARSE GOOGLE VISUALIZATION JSON ===== */
 function parseGViz(text) {
     const jsonText = text.substring(47, text.length - 2);
     return JSON.parse(jsonText);
 }
 
 function normalizeValue(val) {
-    return val ? String(val).trim() : "";
+    if (val === null || val === undefined || val === "") return "";
+    return String(val).trim();
 }
 
 function rowToObject(cols, row) {
     const obj = {};
     cols.forEach((col, i) => {
-        const cell = row.c[i];
-        obj[col.label] = cell ? (cell.f || cell.v || "") : "";
+        const cellValue = row.c[i];
+        let value = "";
+        
+        if (cellValue !== null && cellValue !== undefined) {
+            if (cellValue.f !== null && cellValue.f !== undefined) {
+                value = cellValue.f;
+            } else if (cellValue.v !== null && cellValue.v !== undefined) {
+                value = cellValue.v;
+            }
+        }
+        
+        obj[col.label] = value;
     });
     return obj;
 }
 
+/* ===== CREATE UNIQUE KEY FOR DEDUPLICATION ===== */
 function createUniqueKey(kh, sdt) {
-    return `${normalizeValue(kh).toLowerCase().replace(/\s+/g, '')}|${normalizeValue(sdt).replace(/\s+/g, '')}`;
+    const khNorm = normalizeValue(kh).toLowerCase().replace(/\s+/g, '');
+    const sdtNorm = normalizeValue(sdt).replace(/\s+/g, '');
+    return `${khNorm}|${sdtNorm}`;
 }
 
-function parseDate(d) {
-    if (!d) return new Date(0);
-    const date = new Date(d);
-    return isNaN(date.getTime()) ? new Date(0) : date;
+/* ===== PARSE DATETIME FROM NGAY COLUMN ===== */
+function parseNgayColumn(ngayStr) {
+    if (!ngayStr) return null;
+    try {
+        const str = normalizeValue(ngayStr);
+        if (!str) return null;
+        const date = new Date(str);
+        if (isNaN(date.getTime())) return null;
+        return date;
+    } catch (e) {
+        return null;
+    }
 }
 
-/* ===== MODAL ===== */
-function openImageModal(url, title) {
-    if (!url) return;
-    document.getElementById("modalTitle").innerText = "🖼️ " + title;
-    document.getElementById("modalBody").innerHTML = '⏳ Đang tải...';
-    document.getElementById("imageModal").style.display = "block";
-    const img = new Image();
-    img.className = "modal-image";
-    img.src = url;
-    img.onload = () => document.getElementById("modalBody").innerHTML = `<img src="${url}" class="modal-image">`;
-    img.onerror = () => document.getElementById("modalBody").innerHTML = "❌ Lỗi tải ảnh.";
+/* ===== DETERMINE CUSTOMER STATUS ===== */
+function determineCustomerStatus(data) {
+    const source = data._source; // 'new', 'bc_loyalty', 'original'
+    
+    if (source === 'new') {
+        // Khách hàng từ new_data: đã đăng ký 2026 và được phê duyệt hoặc bị lỗi
+        const dangKy = normalizeValue(data["Đăng ký thành công"]).toUpperCase();
+        const noteHinhAnh = normalizeValue(data["Note hình ảnh"]);
+        const thongTinSai = normalizeValue(data["Thông tin sai/thiếu (nếu có)"]);
+        
+        if (dangKy === "OK") {
+            return {
+                status: "approved-2026",
+                display: "✅ Đã ký 2026 & Đã duyệt",
+                status2025: "Đã ký 2025",
+                status2026: "Đã ký 2026 - ĐÃ DUYỆT",
+                note: ""
+            };
+        } else {
+            return {
+                status: "error-2026",
+                display: "❌ Đã ký 2026 bị lỗi",
+                status2025: "Đã ký 2025",
+                status2026: "Đã ký 2026 - BỊ LỖI",
+                note: [noteHinhAnh, thongTinSai].filter(n => n).join(" | ")
+            };
+        }
+    } else if (source === 'bc_loyalty') {
+        // Khách hàng từ bc_loyalty: có thể là mới ký 2025 hoặc đã ký 2026 chưa duyệt
+        const formType = normalizeValue(data["Cột A"] || data["Form"] || "");
+        
+        if (formType.includes("FM2601")) {
+            // Đã đăng ký 2026 nhưng chưa được duyệt
+            return {
+                status: "pending-2026",
+                display: "⏳ Đã ký 2026 chưa duyệt",
+                status2025: "Đã ký 2025",
+                status2026: "Đã ký 2026 - CHƯA DUYỆT",
+                note: ""
+            };
+        } else if (formType.includes("FM2501")) {
+            // Mới đăng ký 2025, chưa đăng ký 2026
+            return {
+                status: "new-2025-only",
+                display: "🆕 Mới ký 2025 chưa ký 2026",
+                status2025: "Mới ký 2025",
+                status2026: "Chưa ký 2026",
+                note: ""
+            };
+        } else {
+            // Trường hợp không xác định được form type, mặc định là đã ký 2026 chưa duyệt
+            return {
+                status: "pending-2026",
+                display: "⏳ Đã ký 2026 chưa duyệt",
+                status2025: "Đã ký 2025",
+                status2026: "Đã ký 2026 - CHƯA DUYỆT",
+                note: ""
+            };
+        }
+    } else if (source === 'original') {
+        // Khách hàng từ original_data: đã ký 2025, chưa ký 2026
+        return {
+            status: "old-2025-no-2026",
+            display: "⚠️ Đã ký 2025 chưa ký 2026",
+            status2025: "Đã ký 2025",
+            status2026: "Chưa ký 2026",
+            note: ""
+        };
+    }
+    
+    return {
+        status: "unknown",
+        display: "❓ Không xác định",
+        status2025: "",
+        status2026: "",
+        note: ""
+    };
 }
 
-function closeImageModal() { document.getElementById("imageModal").style.display = "none"; }
-
-/* ===== CORE LOGIC ===== */
+/* ===== LOAD DATA ===== */
 async function loadData() {
     try {
-        const [resNew, resOld, resUpdate] = await Promise.all([fetch(NEW_URL), fetch(OLD_URL), fetch(UPDATE_URL)]);
-        const newJson = parseGViz(await resNew.text());
-        const oldJson = parseGViz(await resOld.text());
-        const updateJson = parseGViz(await resUpdate.text());
+        const [newResponse, oldResponse, updateResponse] = await Promise.all([
+            fetch(NEW_URL),
+            fetch(OLD_URL),
+            fetch(UPDATE_URL)
+        ]);
 
-        // 1. Xử lý bc_loyalty để tìm "Main" và "Ký lộn"
-        const loyaltyMap = new Map(); // uniqueKey -> { main, conflicts: [] }
-        
+        const newText = await newResponse.text();
+        const oldText = await oldResponse.text();
+        const updateText = await updateResponse.text();
+
+        const newJson = parseGViz(newText);
+        const oldJson = parseGViz(oldText);
+        const updateJson = parseGViz(updateText);
+
+        console.log("=== DEBUG INFO ===");
+        console.log("New data rows:", newJson.table.rows.length);
+        console.log("Old data rows:", oldJson.table.rows.length);
+        console.log("Update data rows:", updateJson.table.rows.length);
+
+        // Process new_data
+        const newDataArray = [];
+        newJson.table.rows.forEach(row => {
+            const obj = rowToObject(newJson.table.cols, row);
+            
+            const maKH = normalizeValue(obj["Mã KH"]);
+            const sdt = normalizeValue(obj["Số điện thoại di động"]);
+            const kh = normalizeValue(obj["KH"]);
+            const tdv = normalizeValue(obj["TDV"]);
+            
+            obj._search = [maKH, kh, sdt, tdv].join(" ").toLowerCase();
+            obj._source = "new";
+            obj._uniqueKey = createUniqueKey(kh, sdt);
+            obj._ngayDate = null;
+            
+            newDataArray.push(obj);
+        });
+
+        // Process original_data
+        const oldDataArray = [];
+        oldJson.table.rows.forEach(row => {
+            const obj = rowToObject(oldJson.table.cols, row);
+            
+            const maKH = normalizeValue(obj["Mã KH"]);
+            const sdt = normalizeValue(obj["Số điện thoại di động"]);
+            const kh = normalizeValue(obj["KH"]);
+            const tdv = normalizeValue(obj["TDV"]);
+            
+            obj._search = [maKH, kh, sdt, tdv].join(" ").toLowerCase();
+            obj._source = "original";
+            obj._uniqueKey = createUniqueKey(kh, sdt);
+            obj._ngayDate = null;
+            
+            oldDataArray.push(obj);
+        });
+
+        // Process bc_loyalty (update data)
+        const updateDataArray = [];
         updateJson.table.rows.forEach(row => {
             const obj = rowToObject(updateJson.table.cols, row);
-            const key = createUniqueKey(obj["KH"], obj["Số điện thoại di động"]);
-            if (!key || key === "|") return;
-
-            const tdv = normalizeValue(obj["TDV"] || obj["Tên TDV"] || "");
-            const date = parseDate(obj["NGAY"]);
-            const img = normalizeValue(obj["Link ảnh"] || obj["Hình ảnh"] || obj[updateJson.table.cols[13]?.label]);
             
-            const item = { ...obj, _date: date, _img: img, _tdv: tdv };
+            const maKH = normalizeValue(obj["Mã KH"]);
+            const sdt = normalizeValue(obj["Số điện thoại di động"]);
+            const kh = normalizeValue(obj["KH"]);
+            const tdv = normalizeValue(obj["TDV"]);
+            const ngay = normalizeValue(obj["NGAY"]);
+            
+            // Lấy cột A (có thể là tên khác nhau tùy sheet)
+            const colA = normalizeValue(
+                obj["Cột A"] || 
+                obj["Form"] || 
+                obj["Loại form"] ||
+                obj[updateJson.table.cols[0]?.label] || 
+                ""
+            );
+            
+            // Lấy đường link hình ảnh từ cột N (index 13)
+            const imageUrl = normalizeValue(
+                obj["Link ảnh"] ||
+                obj["Hình ảnh"] ||
+                obj[updateJson.table.cols[13]?.label] ||
+                ""
+            );
+            
+            obj._search = [maKH, kh, sdt, tdv].join(" ").toLowerCase();
+            obj._source = "bc_loyalty";
+            obj._uniqueKey = createUniqueKey(kh, sdt);
+            obj._ngayDate = parseNgayColumn(ngay);
+            obj._imageUrl = imageUrl; // Lưu link ảnh
+            obj["Cột A"] = colA; // Lưu lại để xác định form type
+            
+            updateDataArray.push(obj);
+        });
 
-            if (!loyaltyMap.has(key)) {
-                loyaltyMap.set(key, { main: item, conflicts: [] });
-            } else {
-                const group = loyaltyMap.get(key);
-                if (tdv === group.main._tdv) {
-                    // Cùng TDV -> lấy bản mới nhất
-                    if (date > group.main._date) group.main = item;
-                } else {
-                    // Khác TDV -> tính là ký lộn
-                    group.conflicts.push(item);
+        // Merge và loại bỏ trùng lặp
+        // Ưu tiên: new_data > bc_loyalty (đăng ký sớm nhất) > original_data
+        const dataMap = new Map();
+        
+        // Thêm old data trước (ưu tiên thấp nhất)
+        oldDataArray.forEach(item => {
+            if (item._uniqueKey) {
+                dataMap.set(item._uniqueKey, item);
+            }
+        });
+        
+        // Thêm update data (bc_loyalty)
+        updateDataArray.forEach(item => {
+            if (item._uniqueKey) {
+                const existing = dataMap.get(item._uniqueKey);
+                
+                if (!existing || existing._source === 'original') {
+                    dataMap.set(item._uniqueKey, item);
+                } else if (existing._source === 'bc_loyalty') {
+                    // Cả hai đều từ bc_loyalty, lấy bản đăng ký sớm hơn
+                    if (item._ngayDate && existing._ngayDate) {
+                        if (item._ngayDate < existing._ngayDate) {
+                            dataMap.set(item._uniqueKey, item);
+                        }
+                    } else if (item._ngayDate && !existing._ngayDate) {
+                        dataMap.set(item._uniqueKey, item);
+                    }
                 }
             }
         });
-
-        // 2. Gom tất cả khách hàng
-        const finalMap = new Map();
-
-        // Nạp data cũ
-        oldJson.table.rows.forEach(row => {
-            const obj = rowToObject(oldJson.table.cols, row);
-            const key = createUniqueKey(obj["KH"], obj["Số điện thoại di động"]);
-            obj._source = 'original';
-            finalMap.set(key, obj);
-        });
-
-        // Nạp data loyalty (ghi đè lên original)
-        loyaltyMap.forEach((group, key) => {
-            const obj = group.main;
-            obj._source = 'bc_loyalty';
-            obj._conflicts = group.conflicts;
-            obj._imageUrl = group.main._img;
-            finalMap.set(key, obj);
-        });
-
-        // Nạp data new_data (Đã duyệt/Lỗi - Ưu tiên cao nhất về trạng thái)
-        newJson.table.rows.forEach(row => {
-            const obj = rowToObject(newJson.table.cols, row);
-            const key = createUniqueKey(obj["KH"], obj["Số điện thoại di động"]);
-            const existing = finalMap.get(key);
-            
-            obj._source = 'new';
-            // Vẫn giữ lại link ảnh và danh sách ký lộn từ bc_loyalty nếu có
-            if (existing) {
-                obj._imageUrl = existing._imageUrl || "";
-                obj._conflicts = existing._conflicts || [];
+        
+        // Thêm new data cuối cùng (ưu tiên cao nhất)
+        newDataArray.forEach(item => {
+            if (item._uniqueKey) {
+                dataMap.set(item._uniqueKey, item);
             }
-            finalMap.set(key, obj);
         });
-
-        uniqueData = Array.from(finalMap.values()).map(item => {
-            const maKH = normalizeValue(item["Mã KH"]);
-            const kh = normalizeValue(item["KH"]);
-            const sdt = normalizeValue(item["Số điện thoại di động"]);
-            const tdv = normalizeValue(item["TDV"]);
+        
+        uniqueData = Array.from(dataMap.values());
+        
+        // Extract all unique provinces
+        uniqueData.forEach(item => {
             const tinh = normalizeValue(item["Tỉnh"]);
-            
-            item._searchKey = `${maKH} ${kh} ${sdt} ${tdv}`.toLowerCase();
-            item._tinh = tinh;
-            return item;
+            if (tinh) {
+                allProvinces.add(tinh);
+            }
         });
-
-        // Render bộ lọc tỉnh
-        const provinces = [...new Set(uniqueData.map(i => i._tinh))].filter(Boolean).sort();
-        const pFilter = document.getElementById("provinceFilter");
-        provinces.forEach(p => pFilter.add(new Option(p, p)));
+        
+        populateProvinceFilter();
+        
+        const totalRaw = newDataArray.length + oldDataArray.length + updateDataArray.length;
+        console.log("Total raw data:", totalRaw);
+        console.log("Unique data after deduplication:", uniqueData.length);
+        console.log("Duplicates removed:", totalRaw - uniqueData.length);
 
         isLoading = false;
-        render();
-    } catch (e) {
-        console.error(e);
-        document.getElementById("tbody").innerHTML = "❌ Lỗi tải dữ liệu.";
+        showMessage(`✅ Đã tải ${uniqueData.length} khách hàng duy nhất (từ ${newDataArray.length} new + ${updateDataArray.length} bc_loyalty + ${oldDataArray.length} old). Hãy nhập từ khóa để tìm kiếm.`);
+        
+    } catch (error) {
+        isLoading = false;
+        showMessage("❌ Lỗi khi tải dữ liệu. Vui lòng thử lại sau.");
+        console.error("Load error:", error);
     }
 }
 
-function determineStatus(data) {
-    const source = data._source;
-    let res = { status: "unknown", d25: "Đã ký 2025", d26: "Chưa ký 2026", note: "", display: "⚠️ Chưa ký 2026" };
-
-    if (source === 'new') {
-        const isOk = normalizeValue(data["Đăng ký thành công"]).toUpperCase() === "OK";
-        res.status = isOk ? "approved-2026" : "error-2026";
-        res.d26 = isOk ? "Đã ký 2026 - ĐÃ DUYỆT" : "Đã ký 2026 - BỊ LỖI";
-        res.display = isOk ? "✅ Đã duyệt" : "❌ BỊ LỖI";
-        res.note = [data["Note hình ảnh"], data["Thông tin sai/thiếu (nếu có)"]].filter(Boolean).join(" | ");
-    } else if (source === 'bc_loyalty') {
-        const form = normalizeValue(data["Cột A"] || data["Form"] || "");
-        if (form.includes("FM2501")) {
-            res.status = "new-2025-only";
-            res.d25 = "Mới ký 2025";
-            res.display = "🆕 Mới ký 2025";
-        } else {
-            res.status = "pending-2026";
-            res.d26 = "Đã ký 2026 - CHỜ DUYỆT";
-            res.display = "⏳ Chờ duyệt";
-        }
-    } else {
-        res.status = "old-2025-no-2026";
-    }
-    return res;
+/* ===== POPULATE PROVINCE FILTER ===== */
+function populateProvinceFilter() {
+    const select = document.getElementById("provinceFilter");
+    const sortedProvinces = Array.from(allProvinces).sort();
+    
+    select.innerHTML = '<option value="all">-- Tất cả tỉnh thành --</option>';
+    
+    sortedProvinces.forEach(province => {
+        const option = document.createElement("option");
+        option.value = province;
+        option.textContent = province;
+        select.appendChild(option);
+    });
 }
 
-function render() {
-    const kw = document.getElementById("searchInput").value.toLowerCase().trim();
+/* ===== RENDER TABLE ===== */
+function render(keyword = "") {
     const tbody = document.getElementById("tbody");
     const statsDiv = document.getElementById("stats");
     
-    if (isLoading) return;
-    if (!kw && currentFilter === 'all' && currentProvince === 'all') {
-        tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:40px;">🔍 Nhập từ khóa để tìm kiếm...</td></tr>';
+    if (isLoading) {
         return;
     }
 
-    let count = 0;
-    const fragment = document.createDocumentFragment();
+    if (!keyword.trim()) {
+        tbody.innerHTML = '<tr><td colspan="9" class="no-results">👆 Nhập từ khóa để bắt đầu tìm kiếm</td></tr>';
+        statsDiv.style.display = "none";
+        return;
+    }
 
-    uniqueData.forEach(item => {
-        if (kw && !item._searchKey.includes(kw)) return;
-        if (currentProvince !== 'all' && item._tinh !== currentProvince) return;
+    const kw = keyword.toLowerCase().trim();
+    const fragment = document.createDocumentFragment();
+    let count = 0;
+    
+    const stats = {
+        'approved-2026': 0,
+        'pending-2026': 0,
+        'error-2026': 0,
+        'new-2025-only': 0,
+        'old-2025-no-2026': 0
+    };
+
+    for (const data of uniqueData) {
+        if (!data._search.includes(kw)) continue;
+
+        const statusInfo = determineCustomerStatus(data);
+        const tinh = normalizeValue(data["Tỉnh"]);
         
-        const info = determineStatus(item);
-        if (currentFilter !== 'all' && info.status !== currentFilter) return;
+        // Apply status filter
+        if (currentFilter !== 'all' && statusInfo.status !== currentFilter) continue;
+        
+        // Apply province filter
+        if (currentProvince !== 'all' && tinh !== currentProvince) continue;
 
         const tr = document.createElement("tr");
-        tr.className = info.status;
+        tr.className = statusInfo.status;
+        
+        stats[statusInfo.status]++;
 
-        // Xử lý ghi chú ký lộn
-        let conflictHtml = "";
-        if (item._conflicts && item._conflicts.length > 0) {
-            item._conflicts.forEach(c => {
-                conflictHtml += `<span class="conflict-tag" onclick="openImageModal('${c._img}', 'Ảnh ký lộn của ${c._tdv}')">${c._tdv} ký lộn</span> `;
-            });
-        }
-
-        const imgUrl = item._imageUrl || "";
-        const statusClass = imgUrl ? "clickable-status" : "";
-        const statusOnClick = imgUrl ? `onclick="openImageModal('${imgUrl}', 'Ảnh của ${item["KH"]}')"` : "";
+        const maKH = normalizeValue(data["Mã KH"]);
+        const sdt = normalizeValue(data["Số điện thoại di động"]);
+        const khachHang = normalizeValue(data["KH"]);
+        const tdvName = normalizeValue(data["TDV"]);
+        const imageUrl = data._imageUrl || "";
+        
+        const statusCellClass = imageUrl ? 'clickable-status' : '';
+        const statusCellOnClick = imageUrl ? `onclick="openImageModal('${imageUrl}', '${khachHang}')"` : '';
 
         tr.innerHTML = `
-            <td>${item["Mã KH"] || ""}</td>
-            <td>${item["KH"] || ""}</td>
-            <td>${item._tinh || ""}</td>
-            <td>${item["Số điện thoại di động"] || ""}</td>
-            <td>${item["TDV"] || ""}</td>
-            <td>${info.d25}</td>
-            <td>${info.d26}</td>
-            <td>${info.note} ${conflictHtml}</td>
-            <td class="${statusClass} status-${info.status}" ${statusOnClick}>${info.display} ${imgUrl ? '🖼️' : ''}</td>
+            <td>${maKH}</td>
+            <td>${khachHang}</td>
+            <td>${tinh}</td>
+            <td>${sdt}</td>
+            <td>${tdvName}</td>
+            <td>${statusInfo.status2025}</td>
+            <td>${statusInfo.status2026}</td>
+            <td>${statusInfo.note}</td>
+            <td class="status-${statusInfo.status.replace(/-/g, '-')} ${statusCellClass}" ${statusCellOnClick} title="${imageUrl ? 'Click để xem hình ảnh' : ''}">${statusInfo.display}</td>
         `;
+
         fragment.appendChild(tr);
         count++;
-    });
+        
+        if (count >= MAX_RENDER) break;
+    }
 
-    tbody.innerHTML = "";
-    tbody.appendChild(fragment);
-    statsDiv.innerHTML = `📊 Tìm thấy <strong>${count}</strong> kết quả.`;
-    statsDiv.style.display = "block";
+    if (count === 0) {
+        tbody.innerHTML = '<tr><td colspan="9" class="no-results">🔍 Không tìm thấy kết quả phù hợp</td></tr>';
+        statsDiv.style.display = "none";
+    } else {
+        tbody.innerHTML = "";
+        tbody.appendChild(fragment);
+        
+        const filterText = currentFilter === 'all' ? '' : ` (Lọc: ${document.querySelector(`#status-${currentFilter.split('-')[0]}`).nextElementSibling.textContent})`;
+        const provinceText = currentProvince !== 'all' ? ` - Tỉnh: ${currentProvince}` : '';
+        
+        statsDiv.innerHTML = `
+            📊 Tìm thấy <strong>${count}</strong> kết quả${filterText}${provinceText}<br>
+            ✅ Đã ký 2026 & Duyệt: <strong>${stats['approved-2026']}</strong> | 
+            ⏳ Đã ký 2026 chưa duyệt: <strong>${stats['pending-2026']}</strong> | 
+            ❌ Đã ký 2026 bị lỗi: <strong>${stats['error-2026']}</strong><br>
+            🆕 Mới ký 2025: <strong>${stats['new-2025-only']}</strong> | 
+            ⚠️ Đã ký 2025 chưa ký 2026: <strong>${stats['old-2025-no-2026']}</strong>
+            ${count >= MAX_RENDER ? ` (Hiển thị tối đa ${MAX_RENDER} kết quả)` : ''}
+        `;
+        statsDiv.style.display = "block";
+    }
 }
 
-/* ===== EVENTS ===== */
-document.getElementById("searchInput").addEventListener("input", render);
-document.querySelectorAll('input[name="statusFilter"]').forEach(r => r.addEventListener('change', e => { currentFilter = e.target.value; render(); }));
-document.getElementById("provinceFilter").addEventListener('change', e => { currentProvince = e.target.value; render(); });
+/* ===== SHOW MESSAGE ===== */
+function showMessage(msg) {
+    const tbody = document.getElementById("tbody");
+    tbody.innerHTML = `<tr><td colspan="9" class="loading">${msg}</td></tr>`;
+}
+
+/* ===== SEARCH WITH DEBOUNCE ===== */
+document.getElementById("searchInput").addEventListener("input", e => {
+    clearTimeout(debounceTimer);
+    const value = e.target.value;
+    debounceTimer = setTimeout(() => render(value), 250);
+});
+
+/* ===== STATUS FILTER ===== */
+document.querySelectorAll('input[name="statusFilter"]').forEach(radio => {
+    radio.addEventListener('change', e => {
+        currentFilter = e.target.value;
+        const keyword = document.getElementById("searchInput").value;
+        render(keyword);
+    });
+});
+
+/* ===== PROVINCE FILTER ===== */
+document.getElementById("provinceFilter").addEventListener('change', e => {
+    currentProvince = e.target.value;
+    const keyword = document.getElementById("searchInput").value;
+    render(keyword);
+});
+
+/* ===== CLEAR ALL FILTERS ===== */
 document.getElementById("clearFilters").addEventListener('click', () => {
-    document.getElementById("searchInput").value = "";
     document.getElementById("status-all").checked = true;
     currentFilter = 'all';
+    
     document.getElementById("provinceFilter").value = 'all';
     currentProvince = 'all';
-    render();
+    
+    document.getElementById("searchInput").value = '';
+    
+    render('');
 });
+
+document.getElementById("searchInput").focus();
 
 loadData();
 </script>
+
 </body>
 </html>
