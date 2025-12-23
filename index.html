@@ -15,7 +15,7 @@
     }
     
     .container {
-        max-width: 1400px;
+        max-width: 1600px;
         margin: 0 auto;
         background: white;
         padding: 30px;
@@ -35,20 +35,104 @@
     
     .filter-box {
         margin-bottom: 20px;
-        padding: 15px;
-        background: #f9f9f9;
-        border-radius: 6px;
+        padding: 20px;
+        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        border-radius: 10px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.08);
     }
     
-    .filter-box label {
-        margin-right: 15px;
-        cursor: pointer;
+    .filter-group {
+        margin-bottom: 15px;
+    }
+    
+    .filter-group:last-child {
+        margin-bottom: 0;
+    }
+    
+    .filter-label {
+        display: block;
+        font-weight: 600;
+        color: #2c3e50;
+        margin-bottom: 10px;
         font-size: 14px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
     }
     
-    .filter-box input[type="radio"] {
-        margin-right: 5px;
+    .filter-options {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+    
+    .filter-chip {
+        position: relative;
+    }
+    
+    .filter-chip input[type="radio"],
+    .filter-chip input[type="checkbox"] {
+        display: none;
+    }
+    
+    .filter-chip label {
+        display: inline-block;
+        padding: 8px 16px;
+        background: white;
+        border: 2px solid #ddd;
+        border-radius: 20px;
         cursor: pointer;
+        font-size: 13px;
+        transition: all 0.3s ease;
+        user-select: none;
+    }
+    
+    .filter-chip label:hover {
+        border-color: #4CAF50;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(76, 175, 80, 0.2);
+    }
+    
+    .filter-chip input:checked + label {
+        background: #4CAF50;
+        color: white;
+        border-color: #4CAF50;
+        font-weight: 600;
+    }
+    
+    .province-select {
+        width: 100%;
+        max-width: 300px;
+        padding: 10px 15px;
+        font-size: 14px;
+        border: 2px solid #ddd;
+        border-radius: 8px;
+        background: white;
+        cursor: pointer;
+        transition: border-color 0.3s;
+    }
+    
+    .province-select:focus {
+        outline: none;
+        border-color: #4CAF50;
+    }
+    
+    .clear-filters {
+        margin-top: 15px;
+        padding: 8px 20px;
+        background: #ff5252;
+        color: white;
+        border: none;
+        border-radius: 20px;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 600;
+        transition: all 0.3s ease;
+    }
+    
+    .clear-filters:hover {
+        background: #ff1744;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(255, 82, 82, 0.3);
     }
     
     input[type="text"] { 
@@ -102,34 +186,38 @@
         z-index: 10;
     }
     
-    tr.ok { 
-        background: #e8f5e9; 
-    }
-    
-    tr.missing { 
-        background: #ffebee; 
-    }
-    
-    tr.pending {
-        background: #fff9c4;
-    }
+    tr.approved-2026 { background: #c8e6c9; }
+    tr.pending-2026 { background: #fff9c4; }
+    tr.new-2025-only { background: #e1bee7; }
+    tr.old-2025-no-2026 { background: #ffccbc; }
+    tr.error-2026 { background: #ffcdd2; }
     
     tr:hover {
-        background: #f5f5f5 !important;
+        opacity: 0.8;
     }
     
-    .status-ok {
+    .status-approved {
         color: #2e7d32;
-        font-weight: 600;
-    }
-    
-    .status-missing {
-        color: #c62828;
         font-weight: 600;
     }
     
     .status-pending {
         color: #f57c00;
+        font-weight: 600;
+    }
+    
+    .status-new-2025 {
+        color: #7b1fa2;
+        font-weight: 600;
+    }
+    
+    .status-old-no-2026 {
+        color: #e64a19;
+        font-weight: 600;
+    }
+    
+    .status-error {
+        color: #c62828;
         font-weight: 600;
     }
     
@@ -164,19 +252,44 @@
     </div>
     
     <div class="filter-box">
-        <strong>Lọc trạng thái:</strong>
-        <label>
-            <input type="radio" name="statusFilter" value="all" checked> Tất cả
-        </label>
-        <label>
-            <input type="radio" name="statusFilter" value="ok"> ✅ Đã tham gia
-        </label>
-        <label>
-            <input type="radio" name="statusFilter" value="missing"> ❌ Chưa tham gia
-        </label>
-        <label>
-            <input type="radio" name="statusFilter" value="pending"> ❓ Đã upload chưa kiểm tra
-        </label>
+        <div class="filter-group">
+            <span class="filter-label">🔍 Trạng thái</span>
+            <div class="filter-options">
+                <div class="filter-chip">
+                    <input type="radio" name="statusFilter" value="all" id="status-all" checked>
+                    <label for="status-all">📋 Tất cả</label>
+                </div>
+                <div class="filter-chip">
+                    <input type="radio" name="statusFilter" value="approved-2026" id="status-approved">
+                    <label for="status-approved">✅ Đã ký 2026 & Đã duyệt</label>
+                </div>
+                <div class="filter-chip">
+                    <input type="radio" name="statusFilter" value="pending-2026" id="status-pending">
+                    <label for="status-pending">⏳ Đã ký 2026 chưa duyệt</label>
+                </div>
+                <div class="filter-chip">
+                    <input type="radio" name="statusFilter" value="error-2026" id="status-error">
+                    <label for="status-error">❌ Đã ký 2026 bị lỗi</label>
+                </div>
+                <div class="filter-chip">
+                    <input type="radio" name="statusFilter" value="new-2025-only" id="status-new-2025">
+                    <label for="status-new-2025">🆕 Mới ký 2025 chưa ký 2026</label>
+                </div>
+                <div class="filter-chip">
+                    <input type="radio" name="statusFilter" value="old-2025-no-2026" id="status-old">
+                    <label for="status-old">⚠️ Đã ký 2025 chưa ký 2026</label>
+                </div>
+            </div>
+        </div>
+        
+        <div class="filter-group">
+            <span class="filter-label">📍 Tỉnh thành</span>
+            <select class="province-select" id="provinceFilter">
+                <option value="all">-- Tất cả tỉnh thành --</option>
+            </select>
+        </div>
+        
+        <button class="clear-filters" id="clearFilters">🔄 Xóa tất cả bộ lọc</button>
     </div>
     
     <div id="stats" class="stats" style="display:none;"></div>
@@ -190,16 +303,15 @@
                     <th>Tỉnh</th>
                     <th>SĐT</th>
                     <th>TDV</th>
-                    <th>Team ký 2025</th>
-                    <th>Team ký 2026</th>
-                    <th>Đăng ký thành công</th>
-                    <th>Ghi chú</th>
+                    <th>Trạng thái 2025</th>
                     <th>Trạng thái 2026</th>
+                    <th>Ghi chú</th>
+                    <th>Tổng hợp</th>
                 </tr>
             </thead>
             <tbody id="tbody">
                 <tr>
-                    <td colspan="10" class="loading">⏳ Đang tải dữ liệu...</td>
+                    <td colspan="9" class="loading">⏳ Đang tải dữ liệu...</td>
                 </tr>
             </tbody>
         </table>
@@ -213,11 +325,12 @@ const UPDATE_URL = "https://docs.google.com/spreadsheets/d/14dZ70xuUlYskJHGLfF4d
 
 const MAX_RENDER = 10000;
 
-let allData = [];
 let uniqueData = [];
 let debounceTimer;
 let isLoading = true;
 let currentFilter = 'all';
+let currentProvince = 'all';
+let allProvinces = new Set();
 
 /* ===== PARSE GOOGLE VISUALIZATION JSON ===== */
 function parseGViz(text) {
@@ -237,7 +350,6 @@ function rowToObject(cols, row) {
         let value = "";
         
         if (cellValue !== null && cellValue !== undefined) {
-            // Thử lấy giá trị theo thứ tự ưu tiên: f (formatted) > v (value)
             if (cellValue.f !== null && cellValue.f !== undefined) {
                 value = cellValue.f;
             } else if (cellValue.v !== null && cellValue.v !== undefined) {
@@ -261,30 +373,93 @@ function createUniqueKey(kh, sdt) {
 function parseNgayColumn(ngayStr) {
     if (!ngayStr) return null;
     try {
-        // Format: 2025-12-18 16:00:02.653
         const str = normalizeValue(ngayStr);
         if (!str) return null;
-        
-        // Parse datetime string
         const date = new Date(str);
         if (isNaN(date.getTime())) return null;
-        
         return date;
     } catch (e) {
         return null;
     }
 }
 
-/* ===== CHECK CUSTOMER STATUS IN 2026 ===== */
-function getCustomerStatus(data) {
-    // Nếu data từ bc_loyalty sheet
-    if (data._isUpdate) {
-        return "pending"; // ❓Đã upload chưa kiểm tra
+/* ===== DETERMINE CUSTOMER STATUS ===== */
+function determineCustomerStatus(data) {
+    const source = data._source; // 'new', 'bc_loyalty', 'original'
+    
+    if (source === 'new') {
+        // Khách hàng từ new_data: đã đăng ký 2026 và được phê duyệt hoặc bị lỗi
+        const dangKy = normalizeValue(data["Đăng ký thành công"]).toUpperCase();
+        const noteHinhAnh = normalizeValue(data["Note hình ảnh"]);
+        const thongTinSai = normalizeValue(data["Thông tin sai/thiếu (nếu có)"]);
+        
+        if (dangKy === "OK") {
+            return {
+                status: "approved-2026",
+                display: "✅ Đã ký 2026 & Đã duyệt",
+                status2025: "Đã ký 2025",
+                status2026: "Đã ký 2026 - ĐÃ DUYỆT",
+                note: ""
+            };
+        } else {
+            return {
+                status: "error-2026",
+                display: "❌ Đã ký 2026 bị lỗi",
+                status2025: "Đã ký 2025",
+                status2026: "Đã ký 2026 - BỊ LỖI",
+                note: [noteHinhAnh, thongTinSai].filter(n => n).join(" | ")
+            };
+        }
+    } else if (source === 'bc_loyalty') {
+        // Khách hàng từ bc_loyalty: có thể là mới ký 2025 hoặc đã ký 2026 chưa duyệt
+        const formType = normalizeValue(data["Cột A"] || data["Form"] || "");
+        
+        if (formType.includes("FM2601")) {
+            // Đã đăng ký 2026 nhưng chưa được duyệt
+            return {
+                status: "pending-2026",
+                display: "⏳ Đã ký 2026 chưa duyệt",
+                status2025: "Đã ký 2025",
+                status2026: "Đã ký 2026 - CHƯA DUYỆT",
+                note: ""
+            };
+        } else if (formType.includes("FM2501")) {
+            // Mới đăng ký 2025, chưa đăng ký 2026
+            return {
+                status: "new-2025-only",
+                display: "🆕 Mới ký 2025 chưa ký 2026",
+                status2025: "Mới ký 2025",
+                status2026: "Chưa ký 2026",
+                note: ""
+            };
+        } else {
+            // Trường hợp không xác định được form type, mặc định là đã ký 2026 chưa duyệt
+            return {
+                status: "pending-2026",
+                display: "⏳ Đã ký 2026 chưa duyệt",
+                status2025: "Đã ký 2025",
+                status2026: "Đã ký 2026 - CHƯA DUYỆT",
+                note: ""
+            };
+        }
+    } else if (source === 'original') {
+        // Khách hàng từ original_data: đã ký 2025, chưa ký 2026
+        return {
+            status: "old-2025-no-2026",
+            display: "⚠️ Đã ký 2025 chưa ký 2026",
+            status2025: "Đã ký 2025",
+            status2026: "Chưa ký 2026",
+            note: ""
+        };
     }
     
-    // Nếu từ new_data hoặc original_data
-    const dangKy = normalizeValue(data["Đăng ký thành công"]).toUpperCase();
-    return dangKy === "OK" ? "ok" : "missing";
+    return {
+        status: "unknown",
+        display: "❓ Không xác định",
+        status2025: "",
+        status2026: "",
+        note: ""
+    };
 }
 
 /* ===== LOAD DATA ===== */
@@ -320,9 +495,9 @@ async function loadData() {
             const tdv = normalizeValue(obj["TDV"]);
             
             obj._search = [maKH, kh, sdt, tdv].join(" ").toLowerCase();
-            obj._isNew = true;
-            obj._isUpdate = false;
+            obj._source = "new";
             obj._uniqueKey = createUniqueKey(kh, sdt);
+            obj._ngayDate = null;
             
             newDataArray.push(obj);
         });
@@ -338,9 +513,9 @@ async function loadData() {
             const tdv = normalizeValue(obj["TDV"]);
             
             obj._search = [maKH, kh, sdt, tdv].join(" ").toLowerCase();
-            obj._isNew = false;
-            obj._isUpdate = false;
+            obj._source = "original";
             obj._uniqueKey = createUniqueKey(kh, sdt);
+            obj._ngayDate = null;
             
             oldDataArray.push(obj);
         });
@@ -356,18 +531,26 @@ async function loadData() {
             const tdv = normalizeValue(obj["TDV"]);
             const ngay = normalizeValue(obj["NGAY"]);
             
+            // Lấy cột A (có thể là tên khác nhau tùy sheet)
+            const colA = normalizeValue(
+                obj["Cột A"] || 
+                obj["Form"] || 
+                obj["Loại form"] ||
+                obj[updateJson.table.cols[0]?.label] || 
+                ""
+            );
+            
             obj._search = [maKH, kh, sdt, tdv].join(" ").toLowerCase();
-            obj._isNew = false;
-            obj._isUpdate = true; // Đánh dấu là từ bc_loyalty
+            obj._source = "bc_loyalty";
             obj._uniqueKey = createUniqueKey(kh, sdt);
-            obj._ngayDate = parseNgayColumn(ngay); // Parse date for sorting
+            obj._ngayDate = parseNgayColumn(ngay);
+            obj["Cột A"] = colA; // Lưu lại để xác định form type
             
             updateDataArray.push(obj);
         });
 
-        // Merge và loại bỏ trùng lặp dựa trên KH + SĐT
-        // Ưu tiên: new_data > bc_loyalty > original_data
-        // Với bc_loyalty: nếu có nhiều bản ghi cùng KH+SĐT, lấy bản đăng ký sớm nhất (NGAY nhỏ nhất)
+        // Merge và loại bỏ trùng lặp
+        // Ưu tiên: new_data > bc_loyalty (đăng ký sớm nhất) > original_data
         const dataMap = new Map();
         
         // Thêm old data trước (ưu tiên thấp nhất)
@@ -377,32 +560,27 @@ async function loadData() {
             }
         });
         
-        // Thêm update data (bc_loyalty) - ưu tiên trung bình
-        // Nếu có nhiều bản ghi cùng uniqueKey, chỉ lấy bản có NGAY sớm nhất
+        // Thêm update data (bc_loyalty)
         updateDataArray.forEach(item => {
             if (item._uniqueKey) {
                 const existing = dataMap.get(item._uniqueKey);
                 
-                // Nếu chưa có hoặc existing không phải từ bc_loyalty, thêm vào
-                if (!existing || !existing._isUpdate) {
+                if (!existing || existing._source === 'original') {
                     dataMap.set(item._uniqueKey, item);
-                } else {
-                    // Cả hai đều từ bc_loyalty, so sánh ngày
+                } else if (existing._source === 'bc_loyalty') {
+                    // Cả hai đều từ bc_loyalty, lấy bản đăng ký sớm hơn
                     if (item._ngayDate && existing._ngayDate) {
-                        // Lấy bản có ngày sớm hơn
                         if (item._ngayDate < existing._ngayDate) {
                             dataMap.set(item._uniqueKey, item);
                         }
                     } else if (item._ngayDate && !existing._ngayDate) {
-                        // Item có ngày, existing không có, ưu tiên item
                         dataMap.set(item._uniqueKey, item);
                     }
-                    // Nếu existing có ngày mà item không có, giữ existing
                 }
             }
         });
         
-        // Thêm new data cuối cùng (ưu tiên cao nhất - sẽ ghi đè mọi thứ)
+        // Thêm new data cuối cùng (ưu tiên cao nhất)
         newDataArray.forEach(item => {
             if (item._uniqueKey) {
                 dataMap.set(item._uniqueKey, item);
@@ -411,20 +589,44 @@ async function loadData() {
         
         uniqueData = Array.from(dataMap.values());
         
+        // Extract all unique provinces
+        uniqueData.forEach(item => {
+            const tinh = normalizeValue(item["Tỉnh"]);
+            if (tinh) {
+                allProvinces.add(tinh);
+            }
+        });
+        
+        populateProvinceFilter();
+        
         const totalRaw = newDataArray.length + oldDataArray.length + updateDataArray.length;
         console.log("Total raw data:", totalRaw);
         console.log("Unique data after deduplication:", uniqueData.length);
         console.log("Duplicates removed:", totalRaw - uniqueData.length);
-        console.log("Priority order: new_data > bc_loyalty (earliest NGAY) > original_data");
 
         isLoading = false;
-        showMessage(`✅ Đã tải ${uniqueData.length} khách hàng duy nhất (từ ${newDataArray.length} new + ${updateDataArray.length} update + ${oldDataArray.length} old, đã loại bỏ ${totalRaw - uniqueData.length} bản ghi trùng). Ưu tiên: new_data > bc_loyalty (đăng ký sớm nhất) > original_data. Hãy nhập từ khóa để tìm kiếm.`);
+        showMessage(`✅ Đã tải ${uniqueData.length} khách hàng duy nhất (từ ${newDataArray.length} new + ${updateDataArray.length} bc_loyalty + ${oldDataArray.length} old). Hãy nhập từ khóa để tìm kiếm.`);
         
     } catch (error) {
         isLoading = false;
         showMessage("❌ Lỗi khi tải dữ liệu. Vui lòng thử lại sau.");
         console.error("Load error:", error);
     }
+}
+
+/* ===== POPULATE PROVINCE FILTER ===== */
+function populateProvinceFilter() {
+    const select = document.getElementById("provinceFilter");
+    const sortedProvinces = Array.from(allProvinces).sort();
+    
+    select.innerHTML = '<option value="all">-- Tất cả tỉnh thành --</option>';
+    
+    sortedProvinces.forEach(province => {
+        const option = document.createElement("option");
+        option.value = province;
+        option.textContent = province;
+        select.appendChild(option);
+    });
 }
 
 /* ===== RENDER TABLE ===== */
@@ -437,7 +639,7 @@ function render(keyword = "") {
     }
 
     if (!keyword.trim()) {
-        tbody.innerHTML = '<tr><td colspan="10" class="no-results">👆 Nhập từ khóa để bắt đầu tìm kiếm</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" class="no-results">👆 Nhập từ khóa để bắt đầu tìm kiếm</td></tr>';
         statsDiv.style.display = "none";
         return;
     }
@@ -445,58 +647,36 @@ function render(keyword = "") {
     const kw = keyword.toLowerCase().trim();
     const fragment = document.createDocumentFragment();
     let count = 0;
-    let okCount = 0;
-    let missingCount = 0;
-    let pendingCount = 0;
+    
+    const stats = {
+        'approved-2026': 0,
+        'pending-2026': 0,
+        'error-2026': 0,
+        'new-2025-only': 0,
+        'old-2025-no-2026': 0
+    };
 
     for (const data of uniqueData) {
         if (!data._search.includes(kw)) continue;
 
-        const status = getCustomerStatus(data);
+        const statusInfo = determineCustomerStatus(data);
+        const tinh = normalizeValue(data["Tỉnh"]);
         
         // Apply status filter
-        if (currentFilter === 'ok' && status !== 'ok') continue;
-        if (currentFilter === 'missing' && status !== 'missing') continue;
-        if (currentFilter === 'pending' && status !== 'pending') continue;
+        if (currentFilter !== 'all' && statusInfo.status !== currentFilter) continue;
+        
+        // Apply province filter
+        if (currentProvince !== 'all' && tinh !== currentProvince) continue;
 
         const tr = document.createElement("tr");
+        tr.className = statusInfo.status;
+        
+        stats[statusInfo.status]++;
+
         const maKH = normalizeValue(data["Mã KH"]);
-        
-        if (status === 'ok') {
-            tr.className = "ok";
-            okCount++;
-        } else if (status === 'pending') {
-            tr.className = "pending";
-            pendingCount++;
-        } else {
-            tr.className = "missing";
-            missingCount++;
-        }
-
-        const teamKy2025 = normalizeValue(data["TEAM ĐÃ KÝ 2025"]);
-        const teamKy2026 = normalizeValue(data["TEAM KÝ 2026"]);
-        const dangKyThanhCong = normalizeValue(data["Đăng ký thành công"]);
-        
-        const noteHinhAnh = normalizeValue(data["Note hình ảnh"]);
-        const thongTinSai = normalizeValue(data["Thông tin sai/thiếu (nếu có)"]);
-        const note = [noteHinhAnh, thongTinSai].filter(n => n).join(" | ");
-
         const sdt = normalizeValue(data["Số điện thoại di động"]);
         const khachHang = normalizeValue(data["KH"]);
-        const tinh = normalizeValue(data["Tỉnh"]);
         const tdvName = normalizeValue(data["TDV"]);
-
-        let statusDisplay, statusClass;
-        if (status === 'ok') {
-            statusDisplay = "✅ Đã tham gia";
-            statusClass = "status-ok";
-        } else if (status === 'pending') {
-            statusDisplay = "❓ Đã upload chưa kiểm tra";
-            statusClass = "status-pending";
-        } else {
-            statusDisplay = "❌ Chưa tham gia";
-            statusClass = "status-missing";
-        }
 
         tr.innerHTML = `
             <td>${maKH}</td>
@@ -504,13 +684,10 @@ function render(keyword = "") {
             <td>${tinh}</td>
             <td>${sdt}</td>
             <td>${tdvName}</td>
-            <td>${teamKy2025}</td>
-            <td>${teamKy2026}</td>
-            <td>${dangKyThanhCong}</td>
-            <td>${note}</td>
-            <td class="${statusClass}">
-                ${statusDisplay}
-            </td>
+            <td>${statusInfo.status2025}</td>
+            <td>${statusInfo.status2026}</td>
+            <td>${statusInfo.note}</td>
+            <td class="status-${statusInfo.status.replace(/-/g, '-')}">${statusInfo.display}</td>
         `;
 
         fragment.appendChild(tr);
@@ -520,22 +697,22 @@ function render(keyword = "") {
     }
 
     if (count === 0) {
-        tbody.innerHTML = '<tr><td colspan="10" class="no-results">🔍 Không tìm thấy kết quả phù hợp</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" class="no-results">🔍 Không tìm thấy kết quả phù hợp</td></tr>';
         statsDiv.style.display = "none";
     } else {
         tbody.innerHTML = "";
         tbody.appendChild(fragment);
         
-        const filterText = currentFilter === 'all' ? '' : 
-                          currentFilter === 'ok' ? ' (Chỉ hiển thị đã tham gia)' :
-                          currentFilter === 'pending' ? ' (Chỉ hiển thị đã upload chưa kiểm tra)' :
-                          ' (Chỉ hiển thị chưa tham gia)';
+        const filterText = currentFilter === 'all' ? '' : ` (Lọc: ${document.querySelector(`#status-${currentFilter.split('-')[0]}`).nextElementSibling.textContent})`;
+        const provinceText = currentProvince !== 'all' ? ` - Tỉnh: ${currentProvince}` : '';
         
         statsDiv.innerHTML = `
-            📊 Tìm thấy <strong>${count}</strong> kết quả${filterText}
-            | ✅ Đã tham gia: <strong>${okCount}</strong> 
-            | ❌ Chưa tham gia: <strong>${missingCount}</strong>
-            | ❓ Đã upload chưa kiểm tra: <strong>${pendingCount}</strong>
+            📊 Tìm thấy <strong>${count}</strong> kết quả${filterText}${provinceText}<br>
+            ✅ Đã ký 2026 & Duyệt: <strong>${stats['approved-2026']}</strong> | 
+            ⏳ Đã ký 2026 chưa duyệt: <strong>${stats['pending-2026']}</strong> | 
+            ❌ Đã ký 2026 bị lỗi: <strong>${stats['error-2026']}</strong><br>
+            🆕 Mới ký 2025: <strong>${stats['new-2025-only']}</strong> | 
+            ⚠️ Đã ký 2025 chưa ký 2026: <strong>${stats['old-2025-no-2026']}</strong>
             ${count >= MAX_RENDER ? ` (Hiển thị tối đa ${MAX_RENDER} kết quả)` : ''}
         `;
         statsDiv.style.display = "block";
@@ -545,7 +722,7 @@ function render(keyword = "") {
 /* ===== SHOW MESSAGE ===== */
 function showMessage(msg) {
     const tbody = document.getElementById("tbody");
-    tbody.innerHTML = `<tr><td colspan="10" class="loading">${msg}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" class="loading">${msg}</td></tr>`;
 }
 
 /* ===== SEARCH WITH DEBOUNCE ===== */
@@ -562,6 +739,26 @@ document.querySelectorAll('input[name="statusFilter"]').forEach(radio => {
         const keyword = document.getElementById("searchInput").value;
         render(keyword);
     });
+});
+
+/* ===== PROVINCE FILTER ===== */
+document.getElementById("provinceFilter").addEventListener('change', e => {
+    currentProvince = e.target.value;
+    const keyword = document.getElementById("searchInput").value;
+    render(keyword);
+});
+
+/* ===== CLEAR ALL FILTERS ===== */
+document.getElementById("clearFilters").addEventListener('click', () => {
+    document.getElementById("status-all").checked = true;
+    currentFilter = 'all';
+    
+    document.getElementById("provinceFilter").value = 'all';
+    currentProvince = 'all';
+    
+    document.getElementById("searchInput").value = '';
+    
+    render('');
 });
 
 document.getElementById("searchInput").focus();
