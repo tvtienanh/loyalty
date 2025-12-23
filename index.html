@@ -830,3 +830,242 @@ async function loadData() {
         // Add old data first
         oldDataArray.forEach(item => {
             if (item._uniqueKey) {
+                dataMap.set(item._uniqueKey, item);
+            }
+        });
+        
+        // Add bc_loyalty data - only earliest from same TDV
+        updateDataArray.forEach(item => {
+            if (item._uniqueKey) {
+                const existing = dataMap.get(item._uniqueKey);
+                
+                if (!existing || existing._source === 'original') {
+                    // No existing or existing is from original -> add bc_loyalty
+                    const bcRecords = bcLoyaltyMap.get(item._uniqueKey) || [];
+                    if (bcRecords.length > 0) {
+                        // Get earliest record
+                        const earliest = bcRecords[0];
+                        // Find the matching item
+                        const matchingItem = updateDataArray.find(u => 
+                            u._uniqueKey === item._uniqueKey && 
+                            normalizeValue(u["TDV"]) === earliest.tdv &&
+                            u._ngayDate && earliest.ngayDate &&
+                            u._ngayDate.getTime() === earliest.ngayDate.getTime()
+                        );
+                        if (matchingItem) {
+                            dataMap.set(item._uniqueKey, matchingItem);
+                        }
+                    }
+                } else if (existing._source === 'bc_loyalty') {
+                    // Both from bc_loyalty - keep earliest from different TDV, or latest from same TDV
+                    const existingTdv = normalizeValue(existing["TDV"]);
+                    const itemTdv = normalizeValue(item["TDV"]);
+                    
+                    if (existingTdv === itemTdv) {
+                        // Same TDV - keep latest
+                        if (item._ngayDate && existing._ngayDate) {
+                            if (item._ngayDate > existing._ngayDate) {
+                                dataMap.set(item._uniqueKey, item);
+                            }
+                        }
+                    } else {
+                        // Different TDV - keep earliest overall
+                        if (item._ngayDate && existing._ngayDate) {
+                            if (item._ngayDate < existing._ngayDate) {
+                                dataMap.set(item._uniqueKey, item);
+                            }
+                        }
+                    }
+                }
+            }
+        });
+        
+        // Add new data last (highest priority)
+        newDataArray.forEach(item => {
+            if (item._uniqueKey) {
+                dataMap.set(item._uniqueKey, item);
+            }
+        });
+        
+        uniqueData = Array.from(dataMap.values());
+        
+        // Extract provinces
+        uniqueData.forEach(item => {
+            const tinh = normalizeValue(item["Tỉnh"]);
+            if (tinh) {
+                allProvinces.add(tinh);
+            }
+        });
+        
+        populateProvinceFilter();
+        
+        const totalRaw = newDataArray.length + oldDataArray.length + updateDataArray.length;
+        console.log("Total raw data:", totalRaw);
+        console.log("Unique data:", uniqueData.length);
+        console.log("BC Loyalty unique keys:", bcLoyaltyMap.size);
+
+        isLoading = false;
+        showMessage(`✅ Đã tải ${uniqueData.length} khách hàng duy nhất. Hãy nhập từ khóa để tìm kiếm.`);
+        
+    } catch (error) {
+        isLoading = false;
+        showMessage("❌ Lỗi khi tải dữ liệu. Vui lòng thử lại sau.");
+        console.error("Load error:", error);
+    }
+}
+
+/* ===== POPULATE PROVINCE FILTER ===== */
+function populateProvinceFilter() {
+    const select = document.getElementById("provinceFilter");
+    const sortedProvinces = Array.from(allProvinces).sort();
+    
+    select.innerHTML = '<option value="all">-- Tất cả tỉnh thành --</option>';
+    
+    sortedProvinces.forEach(province => {
+        const option = document.createElement("option");
+        option.value = province;
+        option.textContent = province;
+        select.appendChild(option);
+    });
+}
+
+/* ===== RENDER TABLE ===== */
+function render(keyword = "") {
+    const tbody = document.getElementById("tbody");
+    const statsDiv = document.getElementById("stats");
+    
+    if (isLoading) {
+        return;
+    }
+
+    if (!keyword.trim()) {
+        tbody.innerHTML = '<tr><td colspan="9" class="no-results">👆 Nhập từ khóa để bắt đầu tìm kiếm</td></tr>';
+        statsDiv.style.display = "none";
+        return;
+    }
+
+    const kw = keyword.toLowerCase().trim();
+    const fragment = document.createDocumentFragment();
+    let count = 0;
+    
+    const stats = {
+        'approved-2026': 0,
+        'pending-2026': 0,
+        'error-2026': 0,
+        'new-2025-only': 0,
+        'old-2025-no-2026': 0
+    };
+
+    for (const data of uniqueData) {
+        if (!data._search.includes(kw)) continue;
+
+        const statusInfo = determineCustomerStatus(data);
+        const tinh = normalizeValue(data["Tỉnh"]);
+        
+        if (currentFilter !== 'all' && statusInfo.status !== currentFilter) continue;
+        if (currentProvince !== 'all' && tinh !== currentProvince) continue;
+
+        const tr = document.createElement("tr");
+        tr.className = statusInfo.status;
+        
+        stats[statusInfo.status]++;
+
+        const maKH = normalizeValue(data["Mã KH"]);
+        const sdt = normalizeValue(data["Số điện thoại di động"]);
+        const khachHang = normalizeValue(data["KH"]);
+        const tdvName = normalizeValue(data["TDV"]);
+        const imageUrl = statusInfo.imageUrl || "";
+        
+        const statusCellClass = imageUrl ? 'clickable-status' : '';
+        const statusCellOnClick = imageUrl ? `onclick="openImageModal('${imageUrl}', '${khachHang}')"` : '';
+
+        tr.innerHTML = `
+            <td>${maKH}</td>
+            <td>${khachHang}</td>
+            <td>${tinh}</td>
+            <td>${sdt}</td>
+            <td>${tdvName}</td>
+            <td>${statusInfo.status2025}</td>
+            <td>${statusInfo.status2026}</td>
+            <td>${statusInfo.note}</td>
+            <td class="status-${statusInfo.status.replace(/-/g, '-')} ${statusCellClass}" ${statusCellOnClick} title="${imageUrl ? 'Click để xem hình ảnh' : ''}">${statusInfo.display}</td>
+        `;
+
+        fragment.appendChild(tr);
+        count++;
+        
+        if (count >= MAX_RENDER) break;
+    }
+
+    if (count === 0) {
+        tbody.innerHTML = '<tr><td colspan="9" class="no-results">🔍 Không tìm thấy kết quả phù hợp</td></tr>';
+        statsDiv.style.display = "none";
+    } else {
+        tbody.innerHTML = "";
+        tbody.appendChild(fragment);
+        
+        const filterText = currentFilter === 'all' ? '' : ` (Lọc)`;
+        const provinceText = currentProvince !== 'all' ? ` - Tỉnh: ${currentProvince}` : '';
+        
+        statsDiv.innerHTML = `
+            📊 Tìm thấy <strong>${count}</strong> kết quả${filterText}${provinceText}<br>
+            ✅ Đã ký 2026 & Duyệt: <strong>${stats['approved-2026']}</strong> | 
+            ⏳ Đã ký 2026 chưa duyệt: <strong>${stats['pending-2026']}</strong> | 
+            ❌ Đã ký 2026 bị lỗi: <strong>${stats['error-2026']}</strong><br>
+            🆕 Mới ký 2025: <strong>${stats['new-2025-only']}</strong> | 
+            ⚠️ Đã ký 2025 chưa ký 2026: <strong>${stats['old-2025-no-2026']}</strong>
+            ${count >= MAX_RENDER ? ` (Hiển thị tối đa ${MAX_RENDER})` : ''}
+        `;
+        statsDiv.style.display = "block";
+    }
+}
+
+/* ===== SHOW MESSAGE ===== */
+function showMessage(msg) {
+    const tbody = document.getElementById("tbody");
+    tbody.innerHTML = `<tr><td colspan="9" class="loading">${msg}</td></tr>`;
+}
+
+/* ===== SEARCH WITH DEBOUNCE ===== */
+document.getElementById("searchInput").addEventListener("input", e => {
+    clearTimeout(debounceTimer);
+    const value = e.target.value;
+    debounceTimer = setTimeout(() => render(value), 250);
+});
+
+/* ===== STATUS FILTER ===== */
+document.querySelectorAll('input[name="statusFilter"]').forEach(radio => {
+    radio.addEventListener('change', e => {
+        currentFilter = e.target.value;
+        const keyword = document.getElementById("searchInput").value;
+        render(keyword);
+    });
+});
+
+/* ===== PROVINCE FILTER ===== */
+document.getElementById("provinceFilter").addEventListener('change', e => {
+    currentProvince = e.target.value;
+    const keyword = document.getElementById("searchInput").value;
+    render(keyword);
+});
+
+/* ===== CLEAR ALL FILTERS ===== */
+document.getElementById("clearFilters").addEventListener('click', () => {
+    document.getElementById("status-all").checked = true;
+    currentFilter = 'all';
+    
+    document.getElementById("provinceFilter").value = 'all';
+    currentProvince = 'all';
+    
+    document.getElementById("searchInput").value = '';
+    
+    render('');
+});
+
+document.getElementById("searchInput").focus();
+
+loadData();
+</script>
+
+</body>
+</html>
