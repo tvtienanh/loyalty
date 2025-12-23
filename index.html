@@ -656,7 +656,6 @@ function determineCustomerStatus(data) {
     const source = data._source;
     const uniqueKey = data._uniqueKey;
     
-    // Check FM2601 and FM2501 existence
     const bcRecords = bcLoyaltyMap.get(uniqueKey) || [];
     const hasFm2601 = bcRecords.some(r => normalizeValue(r.formType || "").includes("FM2601"));
     const hasFm2501 = bcRecords.some(r => normalizeValue(r.formType || "").includes("FM2501"));
@@ -693,7 +692,7 @@ function determineCustomerStatus(data) {
                 status2025: "Đã ký 2025",
                 status2026: "Đã ký 2026 - ĐÃ DUYỆT",
                 note: note,
-                imageUrl: imageUrl // Lấy từ FM2601 vì đã ký 2026
+                imageUrl: imageUrl
             };
         } else {
             return {
@@ -702,7 +701,7 @@ function determineCustomerStatus(data) {
                 status2025: "Đã ký 2025",
                 status2026: "Đã ký 2026 - BỊ LỖI",
                 note: note,
-                imageUrl: imageUrl // Lấy từ FM2601 vì đã ký 2026
+                imageUrl: imageUrl
             };
         }
     } else if (source === 'bc_loyalty') {
@@ -716,17 +715,29 @@ function determineCustomerStatus(data) {
                 status2025: "Đã ký 2025",
                 status2026: "Đã ký 2026 - CHƯA DUYỆT",
                 note: note,
-                imageUrl: imageUrl // Lấy từ FM2601
+                imageUrl: imageUrl  // sẽ lấy FM2601 URL từ getImageUrlFromBcLoyalty
             };
         } else if (formType.includes("FM2501")) {
-            return {
-                status: "new-2025-only",
-                display: "🆕 Mới ký 2025 chưa ký 2026",
-                status2025: "Mới ký 2025",
-                status2026: "Chưa ký 2026",
-                note: note,
-                imageUrl: imageUrl // Lấy từ FM2501 cho trường hợp này
-            };
+            // Nếu dòng hiện tại là FM2501, nhưng có FM2601 khác trong bc_loyalty, vẫn hiển thị FM2601
+            if (hasFm2601) {
+                return {
+                    status: "pending-2026",
+                    display: "⏳ Đã ký 2026 chưa duyệt",
+                    status2025: "Đã ký 2025",
+                    status2026: "Đã ký 2026 - CHƯA DUYỆT",
+                    note: note,
+                    imageUrl: imageUrl  // sẽ lấy FM2601 URL
+                };
+            } else {
+                return {
+                    status: "new-2025-only",
+                    display: "🆕 Mới ký 2025 chưa ký 2026",
+                    status2025: "Mới ký 2025",
+                    status2026: "Chưa ký 2026",
+                    note: note,
+                    imageUrl: imageUrl  // sẽ lấy FM2501 URL
+                };
+            }
         } else {
             return {
                 status: "pending-2026",
@@ -740,13 +751,38 @@ function determineCustomerStatus(data) {
     } else if (source === 'original') {
         let note = duplicateNote;
         
+        // Nếu có FM2601, coi như khách hàng đã ký 2026 (chưa duyệt)
+        if (hasFm2601) {
+            return {
+                status: "pending-2026",
+                display: "⏳ Đã ký 2026 chưa duyệt",
+                status2025: "Đã ký 2025",
+                status2026: "Đã ký 2026 - CHƯA DUYỆT",
+                note: note,
+                imageUrl: imageUrl  // sẽ lấy FM2601 URL từ getImageUrlFromBcLoyalty
+            };
+        }
+        
+        // Nếu chỉ có FM2501, coi như mới ký 2025
+        if (hasFm2501 && !hasFm2601) {
+            return {
+                status: "new-2025-only",
+                display: "🆕 Mới ký 2025 chưa ký 2026",
+                status2025: "Mới ký 2025",
+                status2026: "Chưa ký 2026",
+                note: note,
+                imageUrl: imageUrl  // sẽ lấy FM2501 URL
+            };
+        }
+        
+        // Mặc định: khách hàng cũ chưa ký 2026
         return {
             status: "old-2025-no-2026",
             display: "⚠️ Đã ký 2025 chưa ký 2026",
             status2025: "Đã ký 2025",
             status2026: "Chưa ký 2026",
             note: note,
-            imageUrl: "" // Không có FM2601 nên không lấy ảnh
+            imageUrl: ""
         };
     }
     
