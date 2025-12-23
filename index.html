@@ -31,9 +31,6 @@
     
     .search-box {
         margin-bottom: 20px;
-        display: flex;
-        gap: 10px;
-        align-items: center;
     }
     
     .filter-box {
@@ -119,16 +116,10 @@
         border-color: #4CAF50;
     }
     
-    .button-group {
-        display: flex;
-        gap: 10px;
+    .clear-filters {
         margin-top: 15px;
-        flex-wrap: wrap;
-    }
-    
-    .clear-filters,
-    .clear-cache {
         padding: 8px 20px;
+        background: #ff5252;
         color: white;
         border: none;
         border-radius: 20px;
@@ -138,30 +129,15 @@
         transition: all 0.3s ease;
     }
     
-    .clear-filters {
-        background: #ff5252;
-    }
-    
     .clear-filters:hover {
         background: #ff1744;
         transform: translateY(-2px);
         box-shadow: 0 4px 8px rgba(255, 82, 82, 0.3);
     }
     
-    /* Added clear-cache button styling */
-    .clear-cache {
-        background: #2196F3;
-    }
-    
-    .clear-cache:hover {
-        background: #1976D2;
-        transform: translateY(-2px);
-        box-shadow: 0 4px 8px rgba(33, 150, 243, 0.3);
-    }
-    
     input[type="text"] { 
-        flex: 1;
-        min-width: 300px;
+        width: 100%;
+        max-width: 500px;
         padding: 12px 16px; 
         font-size: 15px;
         border: 2px solid #ddd;
@@ -428,11 +404,7 @@
             </select>
         </div>
         
-        <!-- Added button group with clear filters and clear cache buttons -->
-        <div class="button-group">
-            <button class="clear-filters" id="clearFilters">🔄 Xóa tất cả bộ lọc</button>
-            <button class="clear-cache" id="clearCache">🔄 Xóa cache & Reload dữ liệu</button>
-        </div>
+        <button class="clear-filters" id="clearFilters">🔄 Xóa tất cả bộ lọc</button>
     </div>
     
     <div id="stats" class="stats" style="display:none;"></div>
@@ -482,7 +454,7 @@ const UPDATE_URL = "https://docs.google.com/spreadsheets/d/14dZ70xuUlYskJHGLfF4d
 const MAX_RENDER = 10000;
 
 let uniqueData = [];
-let bcLoyaltyMap = new Map();
+let bcLoyaltyMap = new Map(); // Map lưu tất cả records từ bc_loyalty
 let debounceTimer;
 let isLoading = true;
 let currentFilter = 'all';
@@ -505,7 +477,6 @@ function openImageModal(imageUrl, customerName) {
     
     const img = new Image();
     img.className = "modal-image";
-    img.crossOrigin = "anonymous";
     img.onload = function() {
         modalBody.innerHTML = '';
         modalBody.appendChild(img);
@@ -585,27 +556,15 @@ function parseNgayColumn(ngayStr) {
     }
 }
 
-/* ===== IMPROVED: Get correct image URL based on form type and status ===== */
-function getImageUrlFromBcLoyalty(uniqueKey, statusContext = {}) {
+/* ===== GET IMAGE URL FROM BC_LOYALTY ===== */
+function getImageUrlFromBcLoyalty(uniqueKey) {
     const records = bcLoyaltyMap.get(uniqueKey) || [];
     
-    // Nếu khách hàng đã ký 2026 (FM2601), lấy URL từ FM2601
-    if (statusContext.hasFm2601) {
-        for (const record of records) {
-            const formType = normalizeValue(record.formType || "");
-            if (formType.includes("FM2601") && record.imageUrl) {
-                return record.imageUrl;
-            }
-        }
-    }
-    
-    // Nếu chỉ ký 2025 (FM2501), lấy URL từ FM2501
-    if (statusContext.hasFm2501 && !statusContext.hasFm2601) {
-        for (const record of records) {
-            const formType = normalizeValue(record.formType || "");
-            if (formType.includes("FM2501") && record.imageUrl) {
-                return record.imageUrl;
-            }
+    // Chỉ lấy từ FM2601 (không lấy FM2501)
+    for (const record of records) {
+        const formType = normalizeValue(record.formType || "");
+        if (formType.includes("FM2601") && record.imageUrl) {
+            return record.imageUrl;
         }
     }
     
@@ -651,19 +610,13 @@ function findDuplicates(uniqueKey) {
     return duplicates;
 }
 
-/* ===== IMPROVED: Better status determination logic ===== */
-function determineCustomerStatus(data, source = 'original', bcData = null) {
-    const kh = normalizeValue(data["KH"] || "");
-    const sdt = normalizeValue(data["Số điện thoại di động"] || "");
-    const uniqueKey = createUniqueKey(kh, sdt);
+/* ===== DETERMINE STATUS ===== */
+function determineCustomerStatus(data) {
+    const source = data._source;
+    const uniqueKey = data._uniqueKey;
     
-    // Check bc_loyalty existence
-    const bcRecords = bcLoyaltyMap.get(uniqueKey) || [];
-    const hasFm2601 = bcRecords.some(r => normalizeValue(r.formType || "").includes("FM2601"));
-    const hasFm2501 = bcRecords.some(r => normalizeValue(r.formType || "").includes("FM2501"));
-    
-    const statusContext = { hasFm2601, hasFm2501 };
-    const imageUrl = getImageUrlFromBcLoyalty(uniqueKey, statusContext);
+    // Lấy image URL từ bc_loyalty
+    const imageUrl = getImageUrlFromBcLoyalty(uniqueKey);
     
     // Tìm duplicates
     const duplicates = findDuplicates(uniqueKey);
@@ -716,29 +669,17 @@ function determineCustomerStatus(data, source = 'original', bcData = null) {
                 status2025: "Đã ký 2025",
                 status2026: "Đã ký 2026 - CHƯA DUYỆT",
                 note: note,
-                imageUrl: imageUrl  // sẽ lấy FM2601 URL từ getImageUrlFromBcLoyalty
+                imageUrl: imageUrl
             };
         } else if (formType.includes("FM2501")) {
-            // Nếu dòng hiện tại là FM2501, nhưng có FM2601 khác trong bc_loyalty, vẫn hiển thị FM2601
-            if (hasFm2601) {
-                return {
-                    status: "pending-2026",
-                    display: "⏳ Đã ký 2026 chưa duyệt",
-                    status2025: "Đã ký 2025",
-                    status2026: "Đã ký 2026 - CHƯA DUYỆT",
-                    note: note,
-                    imageUrl: imageUrl  // sẽ lấy FM2601 URL
-                };
-            } else {
-                return {
-                    status: "new-2025-only",
-                    display: "🆕 Mới ký 2025 chưa ký 2026",
-                    status2025: "Mới ký 2025",
-                    status2026: "Chưa ký 2026",
-                    note: note,
-                    imageUrl: imageUrl  // sẽ lấy FM2501 URL
-                };
-            }
+            return {
+                status: "new-2025-only",
+                display: "🆕 Mới ký 2025 chưa ký 2026",
+                status2025: "Mới ký 2025",
+                status2026: "Chưa ký 2026",
+                note: note,
+                imageUrl: "" // Không lấy ảnh cho FM2501
+            };
         } else {
             return {
                 status: "pending-2026",
@@ -752,31 +693,6 @@ function determineCustomerStatus(data, source = 'original', bcData = null) {
     } else if (source === 'original') {
         let note = duplicateNote;
         
-        // Nếu có FM2601, coi như khách hàng đã ký 2026 (chưa duyệt)
-        if (hasFm2601) {
-            return {
-                status: "pending-2026",
-                display: "⏳ Đã ký 2026 chưa duyệt",
-                status2025: "Đã ký 2025",
-                status2026: "Đã ký 2026 - CHƯA DUYỆT",
-                note: note,
-                imageUrl: imageUrl  // sẽ lấy FM2601 URL từ getImageUrlFromBcLoyalty
-            };
-        }
-        
-        // Nếu chỉ có FM2501, coi như mới ký 2025
-        if (hasFm2501 && !hasFm2601) {
-            return {
-                status: "new-2025-only",
-                display: "🆕 Mới ký 2025 chưa ký 2026",
-                status2025: "Mới ký 2025",
-                status2026: "Chưa ký 2026",
-                note: note,
-                imageUrl: imageUrl  // sẽ lấy FM2501 URL
-            };
-        }
-        
-        // Mặc định: khách hàng cũ chưa ký 2026
         return {
             status: "old-2025-no-2026",
             display: "⚠️ Đã ký 2025 chưa ký 2026",
@@ -1107,26 +1023,6 @@ function showMessage(msg) {
     tbody.innerHTML = `<tr><td colspan="9" class="loading">${msg}</td></tr>`;
 }
 
-/* ===== Clear cache and reload data ===== */
-function clearCacheAndReload() {
-    isLoading = true;
-    uniqueData = [];
-    bcLoyaltyMap = new Map();
-    allProvinces = new Set();
-    
-    document.getElementById("searchInput").value = '';
-    document.getElementById("status-all").checked = true;
-    currentFilter = 'all';
-    document.getElementById("provinceFilter").value = 'all';
-    currentProvince = 'all';
-    
-    showMessage('⏳ Đang xóa cache và reload dữ liệu...');
-    
-    setTimeout(() => {
-        loadData();
-    }, 500);
-}
-
 /* ===== EVENT LISTENERS ===== */
 document.getElementById("searchInput").addEventListener("input", e => {
     clearTimeout(debounceTimer);
@@ -1152,12 +1048,6 @@ document.getElementById("clearFilters").addEventListener('click', () => {
     currentProvince = 'all';
     document.getElementById("searchInput").value = '';
     render('');
-});
-
-document.getElementById("clearCache").addEventListener('click', () => {
-    if (confirm('Bạn có chắc chắn muốn xóa cache và reload dữ liệu mới không?')) {
-        clearCacheAndReload();
-    }
 });
 
 document.getElementById("searchInput").focus();
