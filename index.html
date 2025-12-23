@@ -652,15 +652,16 @@ function findDuplicates(uniqueKey) {
 }
 
 /* ===== IMPROVED: Better status determination logic ===== */
-function determineCustomerStatus(data) {
-    const source = data._source;
-    const uniqueKey = data._uniqueKey;
+function determineCustomerStatus(data, source = 'original', bcData = null) {
+    const kh = normalizeValue(data["KH"] || "");
+    const sdt = normalizeValue(data["Số điện thoại di động"] || "");
+    const uniqueKey = createUniqueKey(kh, sdt);
     
+    // Check bc_loyalty existence
     const bcRecords = bcLoyaltyMap.get(uniqueKey) || [];
     const hasFm2601 = bcRecords.some(r => normalizeValue(r.formType || "").includes("FM2601"));
     const hasFm2501 = bcRecords.some(r => normalizeValue(r.formType || "").includes("FM2501"));
     
-    // Get context for image URL
     const statusContext = { hasFm2601, hasFm2501 };
     const imageUrl = getImageUrlFromBcLoyalty(uniqueKey, statusContext);
     
