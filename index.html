@@ -337,18 +337,6 @@
     .clickable-status:hover {
         opacity: 0.7;
     }
-    
-    .duplicate-warning {
-        color: #ff9800;
-        font-weight: bold;
-        cursor: pointer;
-        text-decoration: underline;
-        margin-left: 5px;
-    }
-    
-    .duplicate-warning:hover {
-        color: #f57c00;
-    }
 </style>
 </head>
 
@@ -559,9 +547,10 @@ function parseNgayColumn(ngayStr) {
 
 /* ===== DETERMINE CUSTOMER STATUS ===== */
 function determineCustomerStatus(data) {
-    const source = data._source;
+    const source = data._source; // 'new', 'bc_loyalty', 'original'
     
     if (source === 'new') {
+        // Khách hàng từ new_data: đã đăng ký 2026 và được phê duyệt hoặc bị lỗi
         const dangKy = normalizeValue(data["Đăng ký thành công"]).toUpperCase();
         const noteHinhAnh = normalizeValue(data["Note hình ảnh"]);
         const thongTinSai = normalizeValue(data["Thông tin sai/thiếu (nếu có)"]);
@@ -584,9 +573,11 @@ function determineCustomerStatus(data) {
             };
         }
     } else if (source === 'bc_loyalty') {
+        // Khách hàng từ bc_loyalty: có thể là mới ký 2025 hoặc đã ký 2026 chưa duyệt
         const formType = normalizeValue(data["Cột A"] || data["Form"] || "");
         
         if (formType.includes("FM2601")) {
+            // Đã đăng ký 2026 nhưng chưa được duyệt
             return {
                 status: "pending-2026",
                 display: "⏳ Đã ký 2026 chưa duyệt",
@@ -595,6 +586,7 @@ function determineCustomerStatus(data) {
                 note: ""
             };
         } else if (formType.includes("FM2501")) {
+            // Mới đăng ký 2025, chưa đăng ký 2026
             return {
                 status: "new-2025-only",
                 display: "🆕 Mới ký 2025 chưa ký 2026",
@@ -603,6 +595,7 @@ function determineCustomerStatus(data) {
                 note: ""
             };
         } else {
+            // Trường hợp không xác định được form type, mặc định là đã ký 2026 chưa duyệt
             return {
                 status: "pending-2026",
                 display: "⏳ Đã ký 2026 chưa duyệt",
@@ -612,6 +605,7 @@ function determineCustomerStatus(data) {
             };
         }
     } else if (source === 'original') {
+        // Khách hàng từ original_data: đã ký 2025, chưa ký 2026
         return {
             status: "old-2025-no-2026",
             display: "⚠️ Đã ký 2025 chưa ký 2026",
@@ -654,7 +648,6 @@ async function loadData() {
 
         // Process new_data
         const newDataArray = [];
-        
         newJson.table.rows.forEach(row => {
             const obj = rowToObject(newJson.table.cols, row);
             
@@ -663,19 +656,10 @@ async function loadData() {
             const kh = normalizeValue(obj["KH"]);
             const tdv = normalizeValue(obj["TDV"]);
             
-            // Lấy link ảnh từ new_data (cột thứ 14, index 13)
-            const imageUrl = normalizeValue(
-                obj["Link ảnh"] ||
-                obj["Hình ảnh"] ||
-                obj[newJson.table.cols[13]?.label] ||
-                ""
-            );
-            
             obj._search = [maKH, kh, sdt, tdv].join(" ").toLowerCase();
             obj._source = "new";
             obj._uniqueKey = createUniqueKey(kh, sdt);
             obj._ngayDate = null;
-            obj._imageUrl = imageUrl;
             
             newDataArray.push(obj);
         });
@@ -694,15 +678,12 @@ async function loadData() {
             obj._source = "original";
             obj._uniqueKey = createUniqueKey(kh, sdt);
             obj._ngayDate = null;
-            obj._imageUrl = "";
             
             oldDataArray.push(obj);
         });
 
-        // Process bc_loyalty - Thu thập tất cả records theo uniqueKey
+        // Process bc_loyalty (update data)
         const updateDataArray = [];
-        const bcLoyaltyByKey = new Map(); // Map<uniqueKey, Array<records>>
-        
         updateJson.table.rows.forEach(row => {
             const obj = rowToObject(updateJson.table.cols, row);
             
@@ -712,6 +693,7 @@ async function loadData() {
             const tdv = normalizeValue(obj["TDV"]);
             const ngay = normalizeValue(obj["NGAY"]);
             
+            // Lấy cột A (có thể là tên khác nhau tùy sheet)
             const colA = normalizeValue(
                 obj["Cột A"] || 
                 obj["Form"] || 
@@ -720,6 +702,7 @@ async function loadData() {
                 ""
             );
             
+            // Lấy đường link hình ảnh từ cột N (index 13)
             const imageUrl = normalizeValue(
                 obj["Link ảnh"] ||
                 obj["Hình ảnh"] ||
@@ -731,29 +714,24 @@ async function loadData() {
             obj._source = "bc_loyalty";
             obj._uniqueKey = createUniqueKey(kh, sdt);
             obj._ngayDate = parseNgayColumn(ngay);
-            obj._imageUrl = imageUrl;
-            obj["Cột A"] = colA;
+            obj._imageUrl = imageUrl; // Lưu link ảnh
+            obj["Cột A"] = colA; // Lưu lại để xác định form type
             
             updateDataArray.push(obj);
-            
-            // Lưu vào map để check duplicate
-            if (!bcLoyaltyByKey.has(obj._uniqueKey)) {
-                bcLoyaltyByKey.set(obj._uniqueKey, []);
-            }
-            bcLoyaltyByKey.get(obj._uniqueKey).push(obj);
         });
 
         // Merge và loại bỏ trùng lặp
+        // Ưu tiên: new_data > bc_loyalty (đăng ký sớm nhất) > original_data
         const dataMap = new Map();
         
-        // Thêm old data trước
+        // Thêm old data trước (ưu tiên thấp nhất)
         oldDataArray.forEach(item => {
             if (item._uniqueKey) {
                 dataMap.set(item._uniqueKey, item);
             }
         });
         
-        // Thêm bc_loyalty data và xử lý duplicate
+        // Thêm update data (bc_loyalty)
         updateDataArray.forEach(item => {
             if (item._uniqueKey) {
                 const existing = dataMap.get(item._uniqueKey);
@@ -761,6 +739,7 @@ async function loadData() {
                 if (!existing || existing._source === 'original') {
                     dataMap.set(item._uniqueKey, item);
                 } else if (existing._source === 'bc_loyalty') {
+                    // Cả hai đều từ bc_loyalty, lấy bản đăng ký sớm hơn
                     if (item._ngayDate && existing._ngayDate) {
                         if (item._ngayDate < existing._ngayDate) {
                             dataMap.set(item._uniqueKey, item);
@@ -779,32 +758,9 @@ async function loadData() {
             }
         });
         
-        // Xử lý duplicate warnings
-        uniqueData = Array.from(dataMap.values()).map(item => {
-            const bcRecords = bcLoyaltyByKey.get(item._uniqueKey);
-            
-            if (bcRecords && bcRecords.length > 1) {
-                // Có duplicate, tìm các TDV đã upload sau người đầu tiên
-                const sorted = bcRecords.sort((a, b) => {
-                    if (!a._ngayDate) return 1;
-                    if (!b._ngayDate) return -1;
-                    return a._ngayDate - b._ngayDate;
-                });
-                
-                const duplicates = sorted.slice(1); // Bỏ qua record đầu tiên
-                item._duplicates = duplicates.map(dup => ({
-                    tdv: normalizeValue(dup["TDV"]),
-                    imageUrl: dup._imageUrl,
-                    ngay: dup._ngayDate
-                }));
-            } else {
-                item._duplicates = [];
-            }
-            
-            return item;
-        });
+        uniqueData = Array.from(dataMap.values());
         
-        // Extract provinces
+        // Extract all unique provinces
         uniqueData.forEach(item => {
             const tinh = normalizeValue(item["Tỉnh"]);
             if (tinh) {
@@ -892,32 +848,10 @@ function render(keyword = "") {
         const sdt = normalizeValue(data["Số điện thoại di động"]);
         const khachHang = normalizeValue(data["KH"]);
         const tdvName = normalizeValue(data["TDV"]);
+        const imageUrl = data._imageUrl || "";
         
-        // Xây dựng phần ghi chú với duplicate warnings
-        let noteContent = statusInfo.note;
-        if (data._duplicates && data._duplicates.length > 0) {
-            const duplicateWarnings = data._duplicates.map(dup => {
-                return `<span class="duplicate-warning" onclick='openImageModal("${dup.imageUrl}", "${khachHang}")'>${dup.tdv} ký lộn</span>`;
-            }).join(', ');
-            
-            if (noteContent) {
-                noteContent += ' | ' + duplicateWarnings;
-            } else {
-                noteContent = duplicateWarnings;
-            }
-        }
-        
-        // Tạo phần Trạng thái 2026 có thể click để xem ảnh
-        let status2026Content = statusInfo.status2026;
-        if (data._imageUrl && (statusInfo.status === 'approved-2026' || statusInfo.status === 'error-2026' || statusInfo.status === 'pending-2026')) {
-            status2026Content = `<span class="clickable-status" onclick='openImageModal("${data._imageUrl}", "${khachHang}")'>${statusInfo.status2026}</span>`;
-        }
-        
-        // Tạo phần Tổng hợp có thể click để xem ảnh
-        let displayContent = statusInfo.display;
-        if (data._imageUrl && (statusInfo.status === 'approved-2026' || statusInfo.status === 'error-2026' || statusInfo.status === 'pending-2026')) {
-            displayContent = `<span class="clickable-status" onclick='openImageModal("${data._imageUrl}", "${khachHang}")'>${statusInfo.display}</span>`;
-        }
+        const statusCellClass = imageUrl ? 'clickable-status' : '';
+        const statusCellOnClick = imageUrl ? `onclick="openImageModal('${imageUrl}', '${khachHang}')"` : '';
 
         tr.innerHTML = `
             <td>${maKH}</td>
@@ -926,9 +860,9 @@ function render(keyword = "") {
             <td>${sdt}</td>
             <td>${tdvName}</td>
             <td>${statusInfo.status2025}</td>
-            <td>${status2026Content}</td>
-            <td>${noteContent}</td>
-            <td class="status-${statusInfo.status.replace(/-/g, '-')}">${displayContent}</td>
+            <td>${statusInfo.status2026}</td>
+            <td>${statusInfo.note}</td>
+            <td class="status-${statusInfo.status.replace(/-/g, '-')} ${statusCellClass}" ${statusCellOnClick} title="${imageUrl ? 'Click để xem hình ảnh' : ''}">${statusInfo.display}</td>
         `;
 
         fragment.appendChild(tr);
