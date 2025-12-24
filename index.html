@@ -25,8 +25,15 @@
     
     h2 { 
         color: #333; 
-        margin-bottom: 20px;
+        margin-bottom: 10px;
         font-size: 24px;
+    }
+    
+    .update-time {
+        color: #666;
+        font-size: 14px;
+        margin-bottom: 20px;
+        font-style: italic;
     }
     
     .search-box {
@@ -369,6 +376,19 @@
     .duplicate-warning:hover {
         color: #bf360c;
     }
+    
+    .upload-history {
+        color: #0277bd;
+        font-size: 11px;
+        cursor: pointer;
+        text-decoration: underline;
+        display: block;
+        margin-top: 5px;
+    }
+    
+    .upload-history:hover {
+        color: #01579b;
+    }
 </style>
 </head>
 
@@ -376,6 +396,7 @@
 
 <div class="container">
     <h2>🔍 Tra cứu khách hàng Loyalty – Kiểm tra CT 2026</h2>
+    <div class="update-time" id="updateTime"></div>
     
     <div class="search-box">
         <input 
@@ -563,12 +584,33 @@ function parseNgayColumn(ngayStr) {
     try {
         const str = normalizeValue(ngayStr);
         if (!str) return null;
-        const date = new Date(str);
+        
+        // Parse format: YYYY-MM-DD HH:mm:ss.SSS or YYYY/MM/DD HH:mm:ss.SSS
+        const normalized = str.replace(/\//g, '-');
+        const date = new Date(normalized);
+        
         if (isNaN(date.getTime())) return null;
         return date;
     } catch (e) {
         return null;
     }
+}
+
+function formatUpdateTime(date) {
+    if (!date) return "";
+    
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    
+    let hours = date.getHours();
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12;
+    hours = hours ? hours : 12;
+    const hoursStr = String(hours).padStart(2, '0');
+    
+    return `${day}/${month}/${year} - ${hoursStr}:${minutes} ${ampm}`;
 }
 
 function extractImageUrl(htmlString) {
@@ -584,6 +626,17 @@ function extractImageUrl(htmlString) {
     }
     
     return "";
+}
+
+function isSameTeam(tdv1, tdv2) {
+    const t1 = normalizeValue(tdv1).toLowerCase();
+    const t2 = normalizeValue(tdv2).toLowerCase();
+    
+    const hasTele1 = t1.includes('tele');
+    const hasTele2 = t2.includes('tele');
+    
+    // Both have "Tele" or both don't have "Tele" = same team
+    return hasTele1 === hasTele2;
 }
 
 function isWithin7Days(date) {
@@ -707,6 +760,8 @@ async function loadData(useCache = true) {
         console.log("Old data rows:", oldJson.table.rows.length);
         console.log("Update data rows:", updateJson.table.rows.length);
 
+        let latestUpdateDate = null;
+
         const newDataArray = [];
         newJson.table.rows.forEach(row => {
             const obj = rowToObject(newJson.table.cols, row);
@@ -786,13 +841,21 @@ async function loadData(useCache = true) {
                 formType = "FM2501";
             }
             
+            const ngayDate = parseNgayColumn(ngay);
+            
+            // Track latest update date
+            if (ngayDate && (!latestUpdateDate || ngayDate > latestUpdateDate)) {
+                latestUpdateDate = ngayDate;
+            }
+            
             obj._search = [maKH, kh, sdt, tdv].join(" ").toLowerCase();
             obj._source = "bc_loyalty";
             obj._uniqueKey = createUniqueKey(kh, sdt);
-            obj._ngayDate = parseNgayColumn(ngay);
+            obj._ngayDate = ngayDate;
             obj._imageUrl = imageUrl;
             obj["Cột A"] = colA;
             obj._formType = formType;
+            obj._tdv = tdv;
             
             updateDataArray.push(obj);
         });
@@ -806,41 +869,162 @@ async function loadData(useCache = true) {
             }
         });
         
+        // Group bc_loyalty records by unique key
+        const bcLoyaltyByKey = new Map();
         updateDataArray.forEach(item => {
             if (item._uniqueKey) {
-                const existing = dataMap.get(item._uniqueKey);
+                if (!bcLoyaltyByKey.has(item._uniqueKey)) {
+                    bcLoyaltyByKey.set(item._uniqueKey, []);
+                }
+                bcLoyaltyByKey.get(item._uniqueKey).push(item);
+            }
+        });
+        
+        // Process bc_loyalty records
+        bcLoyaltyByKey.forEach((records, uniqueKey) => {
+            if (records.length === 0) return;
+            
+            // Sort by date (newest first)
+            records.sort((a, b) => {
+                if (!a._ngayDate && !b._ngayDate) return 0;
+                if (!a._ngayDate) return 1;
+                if (!b._ngayDate) return -1;
+                return b._ngayDate - a._ngayDate;
+            });
+            
+            // Analyze all records to determine proper main record
+            const newestRecord = records[0];
+            const oldestRecord = records[records.length - 1];
+            const newestTdv = newestRecord._tdv;
+            const newestFormType = newestRecord._formType;
+            
+            let mainRecord = newestRecord; // Default to newest
+            const uploadHistory = [];
+            
+            // Check relationships between records
+            for (let i = 1; i < records.length; i++) {
+                const olderRecord = records[i];
+                const olderTdv = olderRecord._tdv;
+                const olderFormType = olderRecord._formType;
                 
-                if (!existing || existing._source === 'original') {
-                    dataMap.set(item._uniqueKey, item);
-                } else if (existing._source === 'bc_loyalty') {
-                    if (item._formType === 'FM2601' && existing._formType !== 'FM2601') {
-                        dataMap.set(item._uniqueKey, item);
-                    } else if (item._ngayDate && existing._ngayDate) {
-                        if (item._ngayDate > existing._ngayDate) {
-                            if (!duplicateMap.has(item._uniqueKey)) {
-                                duplicateMap.set(item._uniqueKey, []);
-                            }
-                            duplicateMap.get(item._uniqueKey).push({
-                                tdv: normalizeValue(existing["TDV"]),
-                                imageUrl: existing._imageUrl,
-                                date: existing._ngayDate,
-                                formType: existing._formType
-                            });
-                            dataMap.set(item._uniqueKey, item);
-                        } else {
-                            if (!duplicateMap.has(item._uniqueKey)) {
-                                duplicateMap.set(item._uniqueKey, []);
-                            }
-                            duplicateMap.get(item._uniqueKey).push({
-                                tdv: normalizeValue(item["TDV"]),
-                                imageUrl: item._imageUrl,
-                                date: item._ngayDate,
-                                formType: item._formType
-                            });
+                let isDuplicate = false;
+                let reason = '';
+                
+                // Case 1: Same TDV, same form type -> Upload lại
+                if (olderTdv === newestTdv && olderFormType === newestFormType) {
+                    isDuplicate = false;
+                    reason = 'upload lại';
+                }
+                // Case 2: Same TDV, different form type -> Bỏ qua (nâng cấp tự nhiên)
+                else if (olderTdv === newestTdv && olderFormType !== newestFormType) {
+                    continue; // Skip this case entirely
+                }
+                // Case 3: Different TDV, same form type
+                else if (olderTdv !== newestTdv && olderFormType === newestFormType) {
+                    if (isSameTeam(olderTdv, newestTdv)) {
+                        // Same team -> Ký đè
+                        isDuplicate = false;
+                        reason = 'ký đè';
+                        // For "ký đè", we want the OLDER record as main
+                        if (i === records.length - 1) {
+                            // This is the oldest record, should be main
+                            mainRecord = olderRecord;
                         }
+                    } else {
+                        // Different team -> Ký lộn
+                        isDuplicate = true;
+                        reason = 'ký lộn';
+                        // For "ký lộn", we want the OLDER (correct) record as main
+                        mainRecord = olderRecord;
                     }
                 }
+                // Case 4: Different TDV, different form type
+                else if (olderTdv !== newestTdv && olderFormType !== newestFormType) {
+                    if (isSameTeam(olderTdv, newestTdv)) {
+                        // Same team -> Ký đè
+                        isDuplicate = false;
+                        reason = 'ký đè';
+                        // For "ký đè", we want the OLDER record as main
+                        if (i === records.length - 1) {
+                            mainRecord = olderRecord;
+                        }
+                    } else {
+                        // Different team -> Ký lộn
+                        isDuplicate = true;
+                        reason = 'ký lộn';
+                        // For "ký lộn", we want the OLDER (correct) record as main
+                        mainRecord = olderRecord;
+                    }
+                }
+                
+                uploadHistory.push({
+                    tdv: olderTdv,
+                    imageUrl: olderRecord._imageUrl,
+                    date: olderRecord._ngayDate,
+                    formType: olderFormType,
+                    reason: reason,
+                    isDuplicate: isDuplicate,
+                    record: olderRecord
+                });
             }
+            
+            // Now build the history relative to the main record
+            const finalHistory = [];
+            
+            for (const record of records) {
+                if (record === mainRecord) continue;
+                
+                const recordTdv = record._tdv;
+                const recordFormType = record._formType;
+                const mainTdv = mainRecord._tdv;
+                const mainFormType = mainRecord._formType;
+                
+                let isDuplicate = false;
+                let reason = '';
+                
+                // Same TDV, same form -> upload lại
+                if (recordTdv === mainTdv && recordFormType === mainFormType) {
+                    isDuplicate = false;
+                    reason = 'upload lại';
+                }
+                // Same TDV, different form -> Skip
+                else if (recordTdv === mainTdv && recordFormType !== mainFormType) {
+                    continue;
+                }
+                // Different TDV, same team
+                else if (recordTdv !== mainTdv && isSameTeam(recordTdv, mainTdv)) {
+                    isDuplicate = false;
+                    reason = 'ký đè';
+                }
+                // Different TDV, different team
+                else if (recordTdv !== mainTdv && !isSameTeam(recordTdv, mainTdv)) {
+                    isDuplicate = true;
+                    reason = 'ký lộn';
+                }
+                
+                finalHistory.push({
+                    tdv: recordTdv,
+                    imageUrl: record._imageUrl,
+                    date: record._ngayDate,
+                    formType: recordFormType,
+                    reason: reason,
+                    isDuplicate: isDuplicate
+                });
+            }
+            
+            // Filter duplicates for warnings
+            const duplicates = finalHistory.filter(item => item.isDuplicate);
+            
+            if (duplicates.length > 0) {
+                mainRecord._duplicates = duplicates;
+            }
+            
+            // Store full history
+            if (finalHistory.length > 0) {
+                mainRecord._uploadHistory = finalHistory;
+            }
+            
+            dataMap.set(uniqueKey, mainRecord);
         });
         
         newDataArray.forEach(item => {
@@ -851,12 +1035,6 @@ async function loadData(useCache = true) {
         
         uniqueData = Array.from(dataMap.values());
         
-        uniqueData.forEach(item => {
-            if (duplicateMap.has(item._uniqueKey)) {
-                item._duplicates = duplicateMap.get(item._uniqueKey);
-            }
-        });
-        
         allProvinces = new Set();
         uniqueData.forEach(item => {
             const tinh = normalizeValue(item["Tỉnh"]);
@@ -866,6 +1044,12 @@ async function loadData(useCache = true) {
         });
         
         populateProvinceFilter();
+        
+        // Update the time display
+        if (latestUpdateDate) {
+            const updateTimeEl = document.getElementById("updateTime");
+            updateTimeEl.textContent = `Updated tới ngày: ${formatUpdateTime(latestUpdateDate)}`;
+        }
         
         const totalRaw = newDataArray.length + oldDataArray.length + updateDataArray.length;
         console.log("Total raw data:", totalRaw);
@@ -944,15 +1128,18 @@ function render(keyword = "") {
         const imageUrl = statusInfo.imageUrl;
         
         let noteHTML = statusInfo.note;
+        
+        // Display duplicates (ký lộn warnings)
         if (data._duplicates && data._duplicates.length > 0) {
             const dupWarnings = data._duplicates.map(dup => {
                 const dupUrl = dup.imageUrl || '';
                 const dupTdv = dup.tdv || 'Unknown';
                 const dupFormType = dup.formType || '';
+                const reason = dup.reason || 'ký lộn';
                 if (dupUrl) {
-                    return `<span class="duplicate-warning" onclick="openImageModal('${dupUrl}', '${khachHang}')" title="Click để xem ảnh">⚠️ ${dupTdv} ký lộn (${dupFormType})</span>`;
+                    return `<span class="duplicate-warning" onclick="openImageModal('${dupUrl}', '${khachHang}')" title="Click để xem ảnh">⚠️ ${dupTdv} ${reason} (${dupFormType})</span>`;
                 } else {
-                    return `<span class="duplicate-warning">⚠️ ${dupTdv} ký lộn (${dupFormType})</span>`;
+                    return `<span class="duplicate-warning">⚠️ ${dupTdv} ${reason} (${dupFormType})</span>`;
                 }
             }).join('<br>');
             
@@ -960,6 +1147,30 @@ function render(keyword = "") {
                 noteHTML += '<br>' + dupWarnings;
             } else {
                 noteHTML = dupWarnings;
+            }
+        }
+        
+        // Display upload history (non-duplicate uploads like "upload lại", "nâng cấp")
+        if (data._uploadHistory && data._uploadHistory.length > 0) {
+            const nonDuplicates = data._uploadHistory.filter(item => !item.isDuplicate);
+            if (nonDuplicates.length > 0) {
+                const historyInfo = nonDuplicates.map(item => {
+                    const histUrl = item.imageUrl || '';
+                    const histTdv = item.tdv || 'Unknown';
+                    const histFormType = item.formType || '';
+                    const histReason = item.reason || 'upload trước';
+                    if (histUrl) {
+                        return `<span class="upload-history" onclick="openImageModal('${histUrl}', '${khachHang}')" title="Click để xem ảnh">ℹ️ ${histTdv} ${histReason} (${histFormType})</span>`;
+                    } else {
+                        return `<span class="upload-history">ℹ️ ${histTdv} ${histReason} (${histFormType})</span>`;
+                    }
+                }).join('<br>');
+                
+                if (noteHTML) {
+                    noteHTML += '<br>' + historyInfo;
+                } else {
+                    noteHTML = historyInfo;
+                }
             }
         }
         
