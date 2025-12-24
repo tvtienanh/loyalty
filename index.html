@@ -389,6 +389,19 @@
     .upload-history:hover {
         color: #01579b;
     }
+    
+    .error-image-link {
+        color: #c62828;
+        font-size: 11px;
+        cursor: pointer;
+        text-decoration: underline;
+        display: block;
+        margin-top: 5px;
+    }
+    
+    .error-image-link:hover {
+        color: #b71c1c;
+    }
 </style>
 </head>
 
@@ -671,6 +684,7 @@ function determineCustomerStatus(data, allRecords) {
             
             // Find all bc_loyalty records for this customer with FM2601 after cutoff
             let hasReupload = false;
+            let reuploadRecord = null;
             if (allRecords && allRecords.length > 0) {
                 for (const record of allRecords) {
                     if (record._uniqueKey === uniqueKey && 
@@ -679,19 +693,22 @@ function determineCustomerStatus(data, allRecords) {
                         record._ngayDate && 
                         record._ngayDate >= cutoffDate) {
                         hasReupload = true;
-                        break;
+                        if (!reuploadRecord || record._ngayDate > reuploadRecord._ngayDate) {
+                            reuploadRecord = record;
+                        }
                     }
                 }
             }
             
-            if (hasReupload) {
+            if (hasReupload && reuploadRecord) {
                 return {
                     status: "error-2026",
                     display: "❌ Đã ký 2026 bị lỗi, đã up lại",
                     status2025: "Đã ký 2025",
                     status2026: "Đã ký 2026 - BỊ LỖI (Đã up lại)",
                     note: [noteHinhAnh, thongTinSai].filter(n => n).join(" | "),
-                    imageUrl: data._imageUrl || ""
+                    imageUrl: reuploadRecord._imageUrl || "",
+                    errorImageUrl: data._imageUrl || ""
                 };
             } else {
                 return {
@@ -1073,6 +1090,9 @@ async function loadData(useCache = true) {
             }
         });
         
+        // Store updateDataArray globally for status checking
+        window.bcLoyaltyData = updateDataArray;
+        
         populateProvinceFilter();
         
         // Update the time display
@@ -1139,7 +1159,7 @@ function render(keyword = "") {
     for (const data of uniqueData) {
         if (!data._search.includes(kw)) continue;
 
-        const statusInfo = determineCustomerStatus(data, uniqueData);
+        const statusInfo = determineCustomerStatus(data, window.bcLoyaltyData || []);
         const tinh = normalizeValue(data["Tỉnh"]);
         
         if (currentFilter !== 'all' && statusInfo.status !== currentFilter) continue;
@@ -1158,6 +1178,16 @@ function render(keyword = "") {
         const imageUrl = statusInfo.imageUrl;
         
         let noteHTML = statusInfo.note;
+        
+        // Add error image link if this is a re-uploaded error case
+        if (statusInfo.errorImageUrl) {
+            const errorImgLink = `<span class="error-image-link" onclick="openImageModal('${statusInfo.errorImageUrl}', '${khachHang}')" title="Click để xem ảnh lỗi">🔴 Ảnh lỗi (Ký trước)</span>`;
+            if (noteHTML) {
+                noteHTML += '<br>' + errorImgLink;
+            } else {
+                noteHTML = errorImgLink;
+            }
+        }
         
         // Display duplicates (ký lộn warnings)
         if (data._duplicates && data._duplicates.length > 0) {
