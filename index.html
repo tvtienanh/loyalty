@@ -665,14 +665,44 @@ function determineCustomerStatus(data, allRecords) {
                 imageUrl: data._imageUrl || ""
             };
         } else {
-            return {
-                status: "error-2026",
-                display: "❌ Đã ký 2026 bị lỗi",
-                status2025: "Đã ký 2025",
-                status2026: "Đã ký 2026 - BỊ LỖI",
-                note: [noteHinhAnh, thongTinSai].filter(n => n).join(" | "),
-                imageUrl: data._imageUrl || ""
-            };
+            // Check if there's a re-upload in bc_loyalty after 18/12/2025 00:00
+            const cutoffDate = new Date('2025-12-18T00:00:00');
+            const uniqueKey = data._uniqueKey;
+            
+            // Find all bc_loyalty records for this customer with FM2601 after cutoff
+            let hasReupload = false;
+            if (allRecords && allRecords.length > 0) {
+                for (const record of allRecords) {
+                    if (record._uniqueKey === uniqueKey && 
+                        record._source === 'bc_loyalty' && 
+                        record._formType === 'FM2601' &&
+                        record._ngayDate && 
+                        record._ngayDate >= cutoffDate) {
+                        hasReupload = true;
+                        break;
+                    }
+                }
+            }
+            
+            if (hasReupload) {
+                return {
+                    status: "error-2026",
+                    display: "❌ Đã ký 2026 bị lỗi, đã up lại",
+                    status2025: "Đã ký 2025",
+                    status2026: "Đã ký 2026 - BỊ LỖI (Đã up lại)",
+                    note: [noteHinhAnh, thongTinSai].filter(n => n).join(" | "),
+                    imageUrl: data._imageUrl || ""
+                };
+            } else {
+                return {
+                    status: "error-2026",
+                    display: "❌ Đã ký 2026 bị lỗi",
+                    status2025: "Đã ký 2025",
+                    status2026: "Đã ký 2026 - BỊ LỖI",
+                    note: [noteHinhAnh, thongTinSai].filter(n => n).join(" | "),
+                    imageUrl: data._imageUrl || ""
+                };
+            }
         }
     } else if (source === 'bc_loyalty') {
         const formType = normalizeValue(data["Cột A"] || data["Form"] || "");
@@ -1159,10 +1189,19 @@ function render(keyword = "") {
                     const histTdv = item.tdv || 'Unknown';
                     const histFormType = item.formType || '';
                     const histReason = item.reason || 'upload trước';
+                    
+                    // Update display text based on reason
+                    let displayReason = histReason;
+                    if (histReason === 'ký đè') {
+                        displayReason = 'ký đè';
+                    } else if (histReason === 'upload lại') {
+                        displayReason = 'upload lại';
+                    }
+                    
                     if (histUrl) {
-                        return `<span class="upload-history" onclick="openImageModal('${histUrl}', '${khachHang}')" title="Click để xem ảnh">ℹ️ ${histTdv} ${histReason} (${histFormType})</span>`;
+                        return `<span class="upload-history" onclick="openImageModal('${histUrl}', '${khachHang}')" title="Click để xem ảnh">ℹ️ ${histTdv} ${displayReason} (${histFormType})</span>`;
                     } else {
-                        return `<span class="upload-history">ℹ️ ${histTdv} ${histReason} (${histFormType})</span>`;
+                        return `<span class="upload-history">ℹ️ ${histTdv} ${displayReason} (${histFormType})</span>`;
                     }
                 }).join('<br>');
                 
