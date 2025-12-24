@@ -425,7 +425,7 @@
         </div>
         
         <button class="clear-filters" id="clearFilters">🔄 Xóa tất cả bộ lọc</button>
-        <button class="clear-cache" id="clearCache">🗑️ Xóa cache & Tải lại</button>
+        <button class="clear-cache" id="clearCache">🔄 Tải lại dữ liệu</button>
     </div>
     
     <div id="stats" class="stats" style="display:none;"></div>
@@ -472,8 +472,6 @@ const OLD_URL = "https://docs.google.com/spreadsheets/d/14dZ70xuUlYskJHGLfF4dI_l
 const UPDATE_URL = "https://docs.google.com/spreadsheets/d/14dZ70xuUlYskJHGLfF4dI_lY_V8vsqJfAJ-Dlo_DdrU/gviz/tq?tqx=out:json&sheet=bc_loyalty&tq=select%20*%20limit%2020000";
 
 const MAX_RENDER = 10000;
-const CACHE_KEY = 'loyalty_data_cache';
-const CACHE_TIMESTAMP_KEY = 'loyalty_cache_timestamp';
 
 let uniqueData = [];
 let debounceTimer;
@@ -688,29 +686,7 @@ function determineCustomerStatus(data, allRecords) {
 
 async function loadData(useCache = true) {
     try {
-        if (useCache) {
-            const cached = localStorage.getItem(CACHE_KEY);
-            const timestamp = localStorage.getItem(CACHE_TIMESTAMP_KEY);
-            
-            if (cached && timestamp) {
-                const age = Date.now() - parseInt(timestamp);
-                if (age < 3600000) { // 1 giờ
-                    console.log("Loading from cache...");
-                    uniqueData = JSON.parse(cached);
-                    
-                    allProvinces = new Set();
-                    uniqueData.forEach(item => {
-                        const tinh = normalizeValue(item["Tỉnh"]);
-                        if (tinh) allProvinces.add(tinh);
-                    });
-                    
-                    populateProvinceFilter();
-                    isLoading = false;
-                    showMessage(`✅ Đã tải ${uniqueData.length} khách hàng từ cache. Hãy nhập từ khóa để tìm kiếm.`);
-                    return;
-                }
-            }
-        }
+        showMessage("⏳ Đang tải dữ liệu từ Google Sheets...");
         
         const [newResponse, oldResponse, updateResponse] = await Promise.all([
             fetch(NEW_URL + '&_=' + Date.now()),
@@ -891,9 +867,6 @@ async function loadData(useCache = true) {
         
         populateProvinceFilter();
         
-        localStorage.setItem(CACHE_KEY, JSON.stringify(uniqueData));
-        localStorage.setItem(CACHE_TIMESTAMP_KEY, Date.now().toString());
-        
         const totalRaw = newDataArray.length + oldDataArray.length + updateDataArray.length;
         console.log("Total raw data:", totalRaw);
         console.log("Unique data after deduplication:", uniqueData.length);
@@ -1072,12 +1045,13 @@ document.getElementById("clearFilters").addEventListener('click', () => {
 });
 
 document.getElementById("clearCache").addEventListener('click', () => {
-    if (confirm('Bạn có chắc muốn xóa cache và tải lại dữ liệu mới?')) {
-        localStorage.removeItem(CACHE_KEY);
-        localStorage.removeItem(CACHE_TIMESTAMP_KEY);
+    if (confirm('Bạn có chắc muốn tải lại dữ liệu mới?')) {
         isLoading = true;
+        uniqueData = [];
         showMessage("⏳ Đang tải lại dữ liệu...");
-        loadData(false);
+        setTimeout(() => {
+            loadData(false);
+        }, 100);
     }
 });
 
