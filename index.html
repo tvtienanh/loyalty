@@ -135,6 +135,26 @@
         box-shadow: 0 4px 8px rgba(255, 82, 82, 0.3);
     }
     
+    .clear-cache {
+        margin-top: 15px;
+        margin-left: 10px;
+        padding: 8px 20px;
+        background: #2196F3;
+        color: white;
+        border: none;
+        border-radius: 20px;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 600;
+        transition: all 0.3s ease;
+    }
+    
+    .clear-cache:hover {
+        background: #1976D2;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(33, 150, 243, 0.3);
+    }
+    
     input[type="text"] { 
         width: 100%;
         max-width: 500px;
@@ -235,7 +255,6 @@
         font-style: italic;
     }
     
-    /* Modal/Popup styles */
     .modal {
         display: none;
         position: fixed;
@@ -337,6 +356,19 @@
     .clickable-status:hover {
         opacity: 0.7;
     }
+    
+    .duplicate-warning {
+        color: #e65100;
+        font-size: 11px;
+        cursor: pointer;
+        text-decoration: underline;
+        display: block;
+        margin-top: 5px;
+    }
+    
+    .duplicate-warning:hover {
+        color: #bf360c;
+    }
 </style>
 </head>
 
@@ -356,7 +388,7 @@
     
     <div class="filter-box">
         <div class="filter-group">
-            <span class="filter-label">🔍 Trạng thái</span>
+            <span class="filter-label">📊 Trạng thái</span>
             <div class="filter-options">
                 <div class="filter-chip">
                     <input type="radio" name="statusFilter" value="all" id="status-all" checked>
@@ -393,6 +425,7 @@
         </div>
         
         <button class="clear-filters" id="clearFilters">🔄 Xóa tất cả bộ lọc</button>
+        <button class="clear-cache" id="clearCache">🗑️ Xóa cache & Tải lại</button>
     </div>
     
     <div id="stats" class="stats" style="display:none;"></div>
@@ -421,7 +454,6 @@
     </div>
 </div>
 
-<!-- Image Modal -->
 <div id="imageModal" class="modal">
     <div class="modal-content">
         <div class="modal-header">
@@ -440,6 +472,8 @@ const OLD_URL = "https://docs.google.com/spreadsheets/d/14dZ70xuUlYskJHGLfF4dI_l
 const UPDATE_URL = "https://docs.google.com/spreadsheets/d/14dZ70xuUlYskJHGLfF4dI_lY_V8vsqJfAJ-Dlo_DdrU/gviz/tq?tqx=out:json&sheet=bc_loyalty&tq=select%20*%20limit%2020000";
 
 const MAX_RENDER = 10000;
+const CACHE_KEY = 'loyalty_data_cache';
+const CACHE_TIMESTAMP_KEY = 'loyalty_cache_timestamp';
 
 let uniqueData = [];
 let debounceTimer;
@@ -448,7 +482,6 @@ let currentFilter = 'all';
 let currentProvince = 'all';
 let allProvinces = new Set();
 
-/* ===== IMAGE MODAL FUNCTIONS ===== */
 function openImageModal(imageUrl, customerName) {
     const modal = document.getElementById("imageModal");
     const modalBody = document.getElementById("modalBody");
@@ -479,7 +512,6 @@ function closeImageModal() {
     modal.style.display = "none";
 }
 
-// Close modal when clicking outside
 window.onclick = function(event) {
     const modal = document.getElementById("imageModal");
     if (event.target === modal) {
@@ -487,14 +519,12 @@ window.onclick = function(event) {
     }
 }
 
-// Close modal with ESC key
 document.addEventListener('keydown', function(event) {
     if (event.key === 'Escape') {
         closeImageModal();
     }
 });
 
-/* ===== PARSE GOOGLE VISUALIZATION JSON ===== */
 function parseGViz(text) {
     const jsonText = text.substring(47, text.length - 2);
     return JSON.parse(jsonText);
@@ -524,14 +554,12 @@ function rowToObject(cols, row) {
     return obj;
 }
 
-/* ===== CREATE UNIQUE KEY FOR DEDUPLICATION ===== */
 function createUniqueKey(kh, sdt) {
     const khNorm = normalizeValue(kh).toLowerCase().replace(/\s+/g, '');
     const sdtNorm = normalizeValue(sdt).replace(/\s+/g, '');
     return `${khNorm}|${sdtNorm}`;
 }
 
-/* ===== PARSE DATETIME FROM NGAY COLUMN ===== */
 function parseNgayColumn(ngayStr) {
     if (!ngayStr) return null;
     try {
@@ -545,12 +573,33 @@ function parseNgayColumn(ngayStr) {
     }
 }
 
-/* ===== DETERMINE CUSTOMER STATUS ===== */
-function determineCustomerStatus(data) {
-    const source = data._source; // 'new', 'bc_loyalty', 'original'
+function extractImageUrl(htmlString) {
+    if (!htmlString) return "";
+    
+    const match = htmlString.match(/src="([^"]+)"/);
+    if (match && match[1]) {
+        return match[1];
+    }
+    
+    if (htmlString.startsWith('http')) {
+        return htmlString;
+    }
+    
+    return "";
+}
+
+function isWithin7Days(date) {
+    if (!date) return false;
+    const now = new Date();
+    const diffTime = now - date;
+    const diffDays = diffTime / (1000 * 60 * 60 * 24);
+    return diffDays <= 7;
+}
+
+function determineCustomerStatus(data, allRecords) {
+    const source = data._source;
     
     if (source === 'new') {
-        // Khách hàng từ new_data: đã đăng ký 2026 và được phê duyệt hoặc bị lỗi
         const dangKy = normalizeValue(data["Đăng ký thành công"]).toUpperCase();
         const noteHinhAnh = normalizeValue(data["Note hình ảnh"]);
         const thongTinSai = normalizeValue(data["Thông tin sai/thiếu (nếu có)"]);
@@ -561,7 +610,8 @@ function determineCustomerStatus(data) {
                 display: "✅ Đã ký 2026 & Đã duyệt",
                 status2025: "Đã ký 2025",
                 status2026: "Đã ký 2026 - ĐÃ DUYỆT",
-                note: ""
+                note: "",
+                imageUrl: data._imageUrl || ""
             };
         } else {
             return {
@@ -569,49 +619,60 @@ function determineCustomerStatus(data) {
                 display: "❌ Đã ký 2026 bị lỗi",
                 status2025: "Đã ký 2025",
                 status2026: "Đã ký 2026 - BỊ LỖI",
-                note: [noteHinhAnh, thongTinSai].filter(n => n).join(" | ")
+                note: [noteHinhAnh, thongTinSai].filter(n => n).join(" | "),
+                imageUrl: data._imageUrl || ""
             };
         }
     } else if (source === 'bc_loyalty') {
-        // Khách hàng từ bc_loyalty: có thể là mới ký 2025 hoặc đã ký 2026 chưa duyệt
         const formType = normalizeValue(data["Cột A"] || data["Form"] || "");
         
         if (formType.includes("FM2601_Upload Thoa thuan CT Vung tin gang ket 2026")) {
-            // Đã đăng ký 2026 nhưng chưa được duyệt
             return {
                 status: "pending-2026",
                 display: "⏳ Đã ký 2026 chưa duyệt",
                 status2025: "Đã ký 2025",
                 status2026: "Đã ký 2026 - CHƯA DUYỆT",
-                note: ""
+                note: "",
+                imageUrl: data._imageUrl || ""
             };
         } else if (formType.includes("FM2501_Upload Thoa thuan CT Vung tin gang ket 2025")) {
-            // Mới đăng ký 2025, chưa đăng ký 2026
-            return {
-                status: "new-2025-only",
-                display: "🆕 Mới ký 2025 chưa ký 2026",
-                status2025: "Mới ký 2025",
-                status2026: "Chưa ký 2026",
-                note: ""
-            };
+            if (data._ngayDate && isWithin7Days(data._ngayDate)) {
+                return {
+                    status: "new-2025-only",
+                    display: "🆕 Mới ký 2025 chưa ký 2026",
+                    status2025: "Mới ký 2025",
+                    status2026: "Chưa ký 2026",
+                    note: "",
+                    imageUrl: data._imageUrl || ""
+                };
+            } else {
+                return {
+                    status: "old-2025-no-2026",
+                    display: "⚠️ Đã ký 2025 chưa ký 2026",
+                    status2025: "Đã ký 2025",
+                    status2026: "Chưa ký 2026",
+                    note: "",
+                    imageUrl: data._imageUrl || ""
+                };
+            }
         } else {
-            // Trường hợp không xác định được form type, mặc định là đã ký 2026 chưa duyệt
             return {
                 status: "pending-2026",
                 display: "⏳ Đã ký 2026 chưa duyệt",
                 status2025: "Đã ký 2025",
                 status2026: "Đã ký 2026 - CHƯA DUYỆT",
-                note: ""
+                note: "",
+                imageUrl: data._imageUrl || ""
             };
         }
     } else if (source === 'original') {
-        // Khách hàng từ original_data: đã ký 2025, chưa ký 2026
         return {
             status: "old-2025-no-2026",
             display: "⚠️ Đã ký 2025 chưa ký 2026",
             status2025: "Đã ký 2025",
             status2026: "Chưa ký 2026",
-            note: ""
+            note: "",
+            imageUrl: ""
         };
     }
     
@@ -620,17 +681,41 @@ function determineCustomerStatus(data) {
         display: "❓ Không xác định",
         status2025: "",
         status2026: "",
-        note: ""
+        note: "",
+        imageUrl: ""
     };
 }
 
-/* ===== LOAD DATA ===== */
-async function loadData() {
+async function loadData(useCache = true) {
     try {
+        if (useCache) {
+            const cached = localStorage.getItem(CACHE_KEY);
+            const timestamp = localStorage.getItem(CACHE_TIMESTAMP_KEY);
+            
+            if (cached && timestamp) {
+                const age = Date.now() - parseInt(timestamp);
+                if (age < 3600000) { // 1 giờ
+                    console.log("Loading from cache...");
+                    uniqueData = JSON.parse(cached);
+                    
+                    allProvinces = new Set();
+                    uniqueData.forEach(item => {
+                        const tinh = normalizeValue(item["Tỉnh"]);
+                        if (tinh) allProvinces.add(tinh);
+                    });
+                    
+                    populateProvinceFilter();
+                    isLoading = false;
+                    showMessage(`✅ Đã tải ${uniqueData.length} khách hàng từ cache. Hãy nhập từ khóa để tìm kiếm.`);
+                    return;
+                }
+            }
+        }
+        
         const [newResponse, oldResponse, updateResponse] = await Promise.all([
-            fetch(NEW_URL),
-            fetch(OLD_URL),
-            fetch(UPDATE_URL)
+            fetch(NEW_URL + '&_=' + Date.now()),
+            fetch(OLD_URL + '&_=' + Date.now()),
+            fetch(UPDATE_URL + '&_=' + Date.now())
         ]);
 
         const newText = await newResponse.text();
@@ -646,7 +731,6 @@ async function loadData() {
         console.log("Old data rows:", oldJson.table.rows.length);
         console.log("Update data rows:", updateJson.table.rows.length);
 
-        // Process new_data
         const newDataArray = [];
         newJson.table.rows.forEach(row => {
             const obj = rowToObject(newJson.table.cols, row);
@@ -656,15 +740,24 @@ async function loadData() {
             const kh = normalizeValue(obj["KH"]);
             const tdv = normalizeValue(obj["TDV"]);
             
+            const imageUrlRaw = normalizeValue(
+                obj["Link ảnh"] ||
+                obj["Hình ảnh"] ||
+                obj[newJson.table.cols[13]?.label] ||
+                ""
+            );
+            const imageUrl = extractImageUrl(imageUrlRaw);
+            
             obj._search = [maKH, kh, sdt, tdv].join(" ").toLowerCase();
             obj._source = "new";
             obj._uniqueKey = createUniqueKey(kh, sdt);
             obj._ngayDate = null;
+            obj._imageUrl = imageUrl;
+            obj._formType = "FM2601";
             
             newDataArray.push(obj);
         });
 
-        // Process original_data
         const oldDataArray = [];
         oldJson.table.rows.forEach(row => {
             const obj = rowToObject(oldJson.table.cols, row);
@@ -678,11 +771,12 @@ async function loadData() {
             obj._source = "original";
             obj._uniqueKey = createUniqueKey(kh, sdt);
             obj._ngayDate = null;
+            obj._imageUrl = "";
+            obj._formType = "";
             
             oldDataArray.push(obj);
         });
 
-        // Process bc_loyalty (update data)
         const updateDataArray = [];
         updateJson.table.rows.forEach(row => {
             const obj = rowToObject(updateJson.table.cols, row);
@@ -693,7 +787,6 @@ async function loadData() {
             const tdv = normalizeValue(obj["TDV"]);
             const ngay = normalizeValue(obj["NGAY"]);
             
-            // Lấy cột A (có thể là tên khác nhau tùy sheet)
             const colA = normalizeValue(
                 obj["Cột A"] || 
                 obj["Form"] || 
@@ -702,36 +795,41 @@ async function loadData() {
                 ""
             );
             
-            // Lấy đường link hình ảnh từ cột N (index 13)
-            const imageUrl = normalizeValue(
+            const imageUrlRaw = normalizeValue(
                 obj["Link ảnh"] ||
                 obj["Hình ảnh"] ||
                 obj[updateJson.table.cols[13]?.label] ||
                 ""
             );
+            const imageUrl = extractImageUrl(imageUrlRaw);
+            
+            let formType = "";
+            if (colA.includes("FM2601")) {
+                formType = "FM2601";
+            } else if (colA.includes("FM2501")) {
+                formType = "FM2501";
+            }
             
             obj._search = [maKH, kh, sdt, tdv].join(" ").toLowerCase();
             obj._source = "bc_loyalty";
             obj._uniqueKey = createUniqueKey(kh, sdt);
             obj._ngayDate = parseNgayColumn(ngay);
-            obj._imageUrl = imageUrl; // Lưu link ảnh
-            obj["Cột A"] = colA; // Lưu lại để xác định form type
+            obj._imageUrl = imageUrl;
+            obj["Cột A"] = colA;
+            obj._formType = formType;
             
             updateDataArray.push(obj);
         });
 
-        // Merge và loại bỏ trùng lặp
-        // Ưu tiên: new_data > bc_loyalty (đăng ký sớm nhất) > original_data
         const dataMap = new Map();
+        const duplicateMap = new Map();
         
-        // Thêm old data trước (ưu tiên thấp nhất)
         oldDataArray.forEach(item => {
             if (item._uniqueKey) {
                 dataMap.set(item._uniqueKey, item);
             }
         });
         
-        // Thêm update data (bc_loyalty)
         updateDataArray.forEach(item => {
             if (item._uniqueKey) {
                 const existing = dataMap.get(item._uniqueKey);
@@ -739,19 +837,36 @@ async function loadData() {
                 if (!existing || existing._source === 'original') {
                     dataMap.set(item._uniqueKey, item);
                 } else if (existing._source === 'bc_loyalty') {
-                    // Cả hai đều từ bc_loyalty, lấy bản đăng ký sớm hơn
-                    if (item._ngayDate && existing._ngayDate) {
-                        if (item._ngayDate < existing._ngayDate) {
-                            dataMap.set(item._uniqueKey, item);
-                        }
-                    } else if (item._ngayDate && !existing._ngayDate) {
+                    if (item._formType === 'FM2601' && existing._formType !== 'FM2601') {
                         dataMap.set(item._uniqueKey, item);
+                    } else if (item._ngayDate && existing._ngayDate) {
+                        if (item._ngayDate > existing._ngayDate) {
+                            if (!duplicateMap.has(item._uniqueKey)) {
+                                duplicateMap.set(item._uniqueKey, []);
+                            }
+                            duplicateMap.get(item._uniqueKey).push({
+                                tdv: normalizeValue(existing["TDV"]),
+                                imageUrl: existing._imageUrl,
+                                date: existing._ngayDate,
+                                formType: existing._formType
+                            });
+                            dataMap.set(item._uniqueKey, item);
+                        } else {
+                            if (!duplicateMap.has(item._uniqueKey)) {
+                                duplicateMap.set(item._uniqueKey, []);
+                            }
+                            duplicateMap.get(item._uniqueKey).push({
+                                tdv: normalizeValue(item["TDV"]),
+                                imageUrl: item._imageUrl,
+                                date: item._ngayDate,
+                                formType: item._formType
+                            });
+                        }
                     }
                 }
             }
         });
         
-        // Thêm new data cuối cùng (ưu tiên cao nhất)
         newDataArray.forEach(item => {
             if (item._uniqueKey) {
                 dataMap.set(item._uniqueKey, item);
@@ -760,7 +875,13 @@ async function loadData() {
         
         uniqueData = Array.from(dataMap.values());
         
-        // Extract all unique provinces
+        uniqueData.forEach(item => {
+            if (duplicateMap.has(item._uniqueKey)) {
+                item._duplicates = duplicateMap.get(item._uniqueKey);
+            }
+        });
+        
+        allProvinces = new Set();
         uniqueData.forEach(item => {
             const tinh = normalizeValue(item["Tỉnh"]);
             if (tinh) {
@@ -769,6 +890,9 @@ async function loadData() {
         });
         
         populateProvinceFilter();
+        
+        localStorage.setItem(CACHE_KEY, JSON.stringify(uniqueData));
+        localStorage.setItem(CACHE_TIMESTAMP_KEY, Date.now().toString());
         
         const totalRaw = newDataArray.length + oldDataArray.length + updateDataArray.length;
         console.log("Total raw data:", totalRaw);
@@ -785,7 +909,6 @@ async function loadData() {
     }
 }
 
-/* ===== POPULATE PROVINCE FILTER ===== */
 function populateProvinceFilter() {
     const select = document.getElementById("provinceFilter");
     const sortedProvinces = Array.from(allProvinces).sort();
@@ -800,7 +923,6 @@ function populateProvinceFilter() {
     });
 }
 
-/* ===== RENDER TABLE ===== */
 function render(keyword = "") {
     const tbody = document.getElementById("tbody");
     const statsDiv = document.getElementById("stats");
@@ -830,13 +952,11 @@ function render(keyword = "") {
     for (const data of uniqueData) {
         if (!data._search.includes(kw)) continue;
 
-        const statusInfo = determineCustomerStatus(data);
+        const statusInfo = determineCustomerStatus(data, uniqueData);
         const tinh = normalizeValue(data["Tỉnh"]);
         
-        // Apply status filter
         if (currentFilter !== 'all' && statusInfo.status !== currentFilter) continue;
         
-        // Apply province filter
         if (currentProvince !== 'all' && tinh !== currentProvince) continue;
 
         const tr = document.createElement("tr");
@@ -848,7 +968,27 @@ function render(keyword = "") {
         const sdt = normalizeValue(data["Số điện thoại di động"]);
         const khachHang = normalizeValue(data["KH"]);
         const tdvName = normalizeValue(data["TDV"]);
-        const imageUrl = data._imageUrl || "";
+        const imageUrl = statusInfo.imageUrl;
+        
+        let noteHTML = statusInfo.note;
+        if (data._duplicates && data._duplicates.length > 0) {
+            const dupWarnings = data._duplicates.map(dup => {
+                const dupUrl = dup.imageUrl || '';
+                const dupTdv = dup.tdv || 'Unknown';
+                const dupFormType = dup.formType || '';
+                if (dupUrl) {
+                    return `<span class="duplicate-warning" onclick="openImageModal('${dupUrl}', '${khachHang}')" title="Click để xem ảnh">⚠️ ${dupTdv} ký lộn (${dupFormType})</span>`;
+                } else {
+                    return `<span class="duplicate-warning">⚠️ ${dupTdv} ký lộn (${dupFormType})</span>`;
+                }
+            }).join('<br>');
+            
+            if (noteHTML) {
+                noteHTML += '<br>' + dupWarnings;
+            } else {
+                noteHTML = dupWarnings;
+            }
+        }
         
         const statusCellClass = imageUrl ? 'clickable-status' : '';
         const statusCellOnClick = imageUrl ? `onclick="openImageModal('${imageUrl}', '${khachHang}')"` : '';
@@ -861,7 +1001,7 @@ function render(keyword = "") {
             <td>${tdvName}</td>
             <td>${statusInfo.status2025}</td>
             <td>${statusInfo.status2026}</td>
-            <td>${statusInfo.note}</td>
+            <td>${noteHTML}</td>
             <td class="status-${statusInfo.status.replace(/-/g, '-')} ${statusCellClass}" ${statusCellOnClick} title="${imageUrl ? 'Click để xem hình ảnh' : ''}">${statusInfo.display}</td>
         `;
 
@@ -878,7 +1018,7 @@ function render(keyword = "") {
         tbody.innerHTML = "";
         tbody.appendChild(fragment);
         
-        const filterText = currentFilter === 'all' ? '' : ` (Lọc: ${document.querySelector(`#status-${currentFilter.split('-')[0]}`).nextElementSibling.textContent})`;
+        const filterText = currentFilter === 'all' ? '' : ` (Lọc: ${document.querySelector(`label[for="status-${currentFilter.split('-')[0]}"]`)?.textContent || ''})`;
         const provinceText = currentProvince !== 'all' ? ` - Tỉnh: ${currentProvince}` : '';
         
         statsDiv.innerHTML = `
@@ -894,20 +1034,17 @@ function render(keyword = "") {
     }
 }
 
-/* ===== SHOW MESSAGE ===== */
 function showMessage(msg) {
     const tbody = document.getElementById("tbody");
     tbody.innerHTML = `<tr><td colspan="9" class="loading">${msg}</td></tr>`;
 }
 
-/* ===== SEARCH WITH DEBOUNCE ===== */
 document.getElementById("searchInput").addEventListener("input", e => {
     clearTimeout(debounceTimer);
     const value = e.target.value;
     debounceTimer = setTimeout(() => render(value), 250);
 });
 
-/* ===== STATUS FILTER ===== */
 document.querySelectorAll('input[name="statusFilter"]').forEach(radio => {
     radio.addEventListener('change', e => {
         currentFilter = e.target.value;
@@ -916,14 +1053,12 @@ document.querySelectorAll('input[name="statusFilter"]').forEach(radio => {
     });
 });
 
-/* ===== PROVINCE FILTER ===== */
 document.getElementById("provinceFilter").addEventListener('change', e => {
     currentProvince = e.target.value;
     const keyword = document.getElementById("searchInput").value;
     render(keyword);
 });
 
-/* ===== CLEAR ALL FILTERS ===== */
 document.getElementById("clearFilters").addEventListener('click', () => {
     document.getElementById("status-all").checked = true;
     currentFilter = 'all';
@@ -934,6 +1069,16 @@ document.getElementById("clearFilters").addEventListener('click', () => {
     document.getElementById("searchInput").value = '';
     
     render('');
+});
+
+document.getElementById("clearCache").addEventListener('click', () => {
+    if (confirm('Bạn có chắc muốn xóa cache và tải lại dữ liệu mới?')) {
+        localStorage.removeItem(CACHE_KEY);
+        localStorage.removeItem(CACHE_TIMESTAMP_KEY);
+        isLoading = true;
+        showMessage("⏳ Đang tải lại dữ liệu...");
+        loadData(false);
+    }
 });
 
 document.getElementById("searchInput").focus();
