@@ -337,18 +337,6 @@
     .clickable-status:hover {
         opacity: 0.7;
     }
-    
-    .duplicate-link {
-        color: #ff5722;
-        cursor: pointer;
-        text-decoration: underline;
-        font-weight: 600;
-        margin-left: 5px;
-    }
-    
-    .duplicate-link:hover {
-        color: #d84315;
-    }
 </style>
 </head>
 
@@ -454,7 +442,6 @@ const UPDATE_URL = "https://docs.google.com/spreadsheets/d/14dZ70xuUlYskJHGLfF4d
 const MAX_RENDER = 10000;
 
 let uniqueData = [];
-let bcLoyaltyMap = new Map(); // Map lưu tất cả records từ bc_loyalty
 let debounceTimer;
 let isLoading = true;
 let currentFilter = 'all';
@@ -492,6 +479,7 @@ function closeImageModal() {
     modal.style.display = "none";
 }
 
+// Close modal when clicking outside
 window.onclick = function(event) {
     const modal = document.getElementById("imageModal");
     if (event.target === modal) {
@@ -499,6 +487,7 @@ window.onclick = function(event) {
     }
 }
 
+// Close modal with ESC key
 document.addEventListener('keydown', function(event) {
     if (event.key === 'Escape') {
         closeImageModal();
@@ -535,14 +524,14 @@ function rowToObject(cols, row) {
     return obj;
 }
 
-/* ===== CREATE UNIQUE KEY ===== */
+/* ===== CREATE UNIQUE KEY FOR DEDUPLICATION ===== */
 function createUniqueKey(kh, sdt) {
     const khNorm = normalizeValue(kh).toLowerCase().replace(/\s+/g, '');
     const sdtNorm = normalizeValue(sdt).replace(/\s+/g, '');
     return `${khNorm}|${sdtNorm}`;
 }
 
-/* ===== PARSE DATETIME ===== */
+/* ===== PARSE DATETIME FROM NGAY COLUMN ===== */
 function parseNgayColumn(ngayStr) {
     if (!ngayStr) return null;
     try {
@@ -556,88 +545,15 @@ function parseNgayColumn(ngayStr) {
     }
 }
 
-/* ===== GET IMAGE URL FROM BC_LOYALTY ===== */
-function getImageUrlFromBcLoyalty(uniqueKey) {
-    const records = bcLoyaltyMap.get(uniqueKey) || [];
-    
-    // Chỉ lấy từ FM2601 (không lấy FM2501)
-    for (const record of records) {
-        const formType = normalizeValue(record.formType || "");
-        if (formType.includes("FM2601") && record.imageUrl) {
-            return record.imageUrl;
-        }
-    }
-    
-    return "";
-}
-
-/* ===== FIND DUPLICATES ===== */
-function findDuplicates(uniqueKey) {
-    const allRecords = bcLoyaltyMap.get(uniqueKey) || [];
-    if (allRecords.length <= 1) return [];
-    
-    // Chỉ xét các record FM2601
-    const fm2601Records = allRecords.filter(r => {
-        const formType = normalizeValue(r.formType || "");
-        return formType.includes("FM2601");
-    });
-    
-    if (fm2601Records.length <= 1) return [];
-    
-    // Group by TDV
-    const tdvMap = new Map();
-    fm2601Records.forEach(record => {
-        const tdv = normalizeValue(record.tdv);
-        if (!tdvMap.has(tdv)) {
-            tdvMap.set(tdv, []);
-        }
-        tdvMap.get(tdv).push(record);
-    });
-    
-    // Get earliest TDV
-    const earliest = fm2601Records[0];
-    const earliestTdv = normalizeValue(earliest.tdv);
-    
-    // Find duplicates from different TDVs
-    const duplicates = [];
-    tdvMap.forEach((records, tdv) => {
-        if (tdv !== earliestTdv) {
-            const latestRecord = records[records.length - 1];
-            duplicates.push(latestRecord);
-        }
-    });
-    
-    return duplicates;
-}
-
-/* ===== DETERMINE STATUS ===== */
+/* ===== DETERMINE CUSTOMER STATUS ===== */
 function determineCustomerStatus(data) {
-    const source = data._source;
-    const uniqueKey = data._uniqueKey;
-    
-    // Lấy image URL từ bc_loyalty
-    const imageUrl = getImageUrlFromBcLoyalty(uniqueKey);
-    
-    // Tìm duplicates
-    const duplicates = findDuplicates(uniqueKey);
-    let duplicateNote = "";
-    if (duplicates.length > 0) {
-        duplicateNote = duplicates.map(dup => {
-            const tdvName = normalizeValue(dup.tdv);
-            const dupImageUrl = dup.imageUrl || "";
-            return `<span class="duplicate-link" onclick="openImageModal('${dupImageUrl}', '${tdvName}')" title="Click để xem ảnh">${tdvName} ký lộn</span>`;
-        }).join(", ");
-    }
+    const source = data._source; // 'new', 'bc_loyalty', 'original'
     
     if (source === 'new') {
+        // Khách hàng từ new_data: đã đăng ký 2026 và được phê duyệt hoặc bị lỗi
         const dangKy = normalizeValue(data["Đăng ký thành công"]).toUpperCase();
         const noteHinhAnh = normalizeValue(data["Note hình ảnh"]);
         const thongTinSai = normalizeValue(data["Thông tin sai/thiếu (nếu có)"]);
-        
-        let note = [noteHinhAnh, thongTinSai].filter(n => n).join(" | ");
-        if (duplicateNote) {
-            note = note ? `${note} | ${duplicateNote}` : duplicateNote;
-        }
         
         if (dangKy === "OK") {
             return {
@@ -645,8 +561,7 @@ function determineCustomerStatus(data) {
                 display: "✅ Đã ký 2026 & Đã duyệt",
                 status2025: "Đã ký 2025",
                 status2026: "Đã ký 2026 - ĐÃ DUYỆT",
-                note: note,
-                imageUrl: imageUrl
+                note: ""
             };
         } else {
             return {
@@ -654,52 +569,49 @@ function determineCustomerStatus(data) {
                 display: "❌ Đã ký 2026 bị lỗi",
                 status2025: "Đã ký 2025",
                 status2026: "Đã ký 2026 - BỊ LỖI",
-                note: note,
-                imageUrl: imageUrl
+                note: [noteHinhAnh, thongTinSai].filter(n => n).join(" | ")
             };
         }
     } else if (source === 'bc_loyalty') {
-        const formType = normalizeValue(data["Cột A"] || "");
-        let note = duplicateNote;
+        // Khách hàng từ bc_loyalty: có thể là mới ký 2025 hoặc đã ký 2026 chưa duyệt
+        const formType = normalizeValue(data["Cột A"] || data["Form"] || "");
         
-        if (formType.includes("FM2601")) {
+        if (formType.includes("FM2601_Upload Thoa thuan CT Vung tin gang ket 2026")) {
+            // Đã đăng ký 2026 nhưng chưa được duyệt
             return {
                 status: "pending-2026",
                 display: "⏳ Đã ký 2026 chưa duyệt",
                 status2025: "Đã ký 2025",
                 status2026: "Đã ký 2026 - CHƯA DUYỆT",
-                note: note,
-                imageUrl: imageUrl
+                note: ""
             };
-        } else if (formType.includes("FM2501")) {
+        } else if (formType.includes("FM2501_Upload Thoa thuan CT Vung tin gang ket 2025")) {
+            // Mới đăng ký 2025, chưa đăng ký 2026
             return {
                 status: "new-2025-only",
                 display: "🆕 Mới ký 2025 chưa ký 2026",
                 status2025: "Mới ký 2025",
                 status2026: "Chưa ký 2026",
-                note: note,
-                imageUrl: "" // Không lấy ảnh cho FM2501
+                note: ""
             };
         } else {
+            // Trường hợp không xác định được form type, mặc định là đã ký 2026 chưa duyệt
             return {
                 status: "pending-2026",
                 display: "⏳ Đã ký 2026 chưa duyệt",
                 status2025: "Đã ký 2025",
                 status2026: "Đã ký 2026 - CHƯA DUYỆT",
-                note: note,
-                imageUrl: imageUrl
+                note: ""
             };
         }
     } else if (source === 'original') {
-        let note = duplicateNote;
-        
+        // Khách hàng từ original_data: đã ký 2025, chưa ký 2026
         return {
             status: "old-2025-no-2026",
             display: "⚠️ Đã ký 2025 chưa ký 2026",
             status2025: "Đã ký 2025",
             status2026: "Chưa ký 2026",
-            note: note,
-            imageUrl: ""
+            note: ""
         };
     }
     
@@ -708,8 +620,7 @@ function determineCustomerStatus(data) {
         display: "❓ Không xác định",
         status2025: "",
         status2026: "",
-        note: "",
-        imageUrl: ""
+        note: ""
     };
 }
 
@@ -771,7 +682,7 @@ async function loadData() {
             oldDataArray.push(obj);
         });
 
-        // Process bc_loyalty - LƯU TẤT CẢ RECORDS
+        // Process bc_loyalty (update data)
         const updateDataArray = [];
         updateJson.table.rows.forEach(row => {
             const obj = rowToObject(updateJson.table.cols, row);
@@ -782,6 +693,7 @@ async function loadData() {
             const tdv = normalizeValue(obj["TDV"]);
             const ngay = normalizeValue(obj["NGAY"]);
             
+            // Lấy cột A (có thể là tên khác nhau tùy sheet)
             const colA = normalizeValue(
                 obj["Cột A"] || 
                 obj["Form"] || 
@@ -790,100 +702,56 @@ async function loadData() {
                 ""
             );
             
+            // Lấy đường link hình ảnh từ cột N (index 13)
             const imageUrl = normalizeValue(
                 obj["Link ảnh"] ||
                 obj["Hình ảnh"] ||
-                obj["Image"] ||
                 obj[updateJson.table.cols[13]?.label] ||
                 ""
             );
             
-            const uniqueKey = createUniqueKey(kh, sdt);
-            const ngayDate = parseNgayColumn(ngay);
-            
-            // Lưu vào bcLoyaltyMap
-            if (!bcLoyaltyMap.has(uniqueKey)) {
-                bcLoyaltyMap.set(uniqueKey, []);
-            }
-            bcLoyaltyMap.get(uniqueKey).push({
-                tdv: tdv,
-                imageUrl: imageUrl,
-                ngayDate: ngayDate,
-                formType: colA,
-                fullData: obj
-            });
-            
             obj._search = [maKH, kh, sdt, tdv].join(" ").toLowerCase();
             obj._source = "bc_loyalty";
-            obj._uniqueKey = uniqueKey;
-            obj._ngayDate = ngayDate;
-            obj["Cột A"] = colA;
+            obj._uniqueKey = createUniqueKey(kh, sdt);
+            obj._ngayDate = parseNgayColumn(ngay);
+            obj._imageUrl = imageUrl; // Lưu link ảnh
+            obj["Cột A"] = colA; // Lưu lại để xác định form type
             
             updateDataArray.push(obj);
         });
 
-        // Sort bc_loyalty records by date
-        bcLoyaltyMap.forEach((records, key) => {
-            records.sort((a, b) => {
-                if (!a.ngayDate && !b.ngayDate) return 0;
-                if (!a.ngayDate) return 1;
-                if (!b.ngayDate) return -1;
-                return a.ngayDate - b.ngayDate;
-            });
-        });
-
-        console.log("BC Loyalty Map size:", bcLoyaltyMap.size);
-        
-        // Merge data
+        // Merge và loại bỏ trùng lặp
+        // Ưu tiên: new_data > bc_loyalty (đăng ký sớm nhất) > original_data
         const dataMap = new Map();
         
-        // Add old data
+        // Thêm old data trước (ưu tiên thấp nhất)
         oldDataArray.forEach(item => {
             if (item._uniqueKey) {
                 dataMap.set(item._uniqueKey, item);
             }
         });
         
-        // Add bc_loyalty - chỉ lấy 1 record để hiển thị
+        // Thêm update data (bc_loyalty)
         updateDataArray.forEach(item => {
             if (item._uniqueKey) {
                 const existing = dataMap.get(item._uniqueKey);
                 
                 if (!existing || existing._source === 'original') {
-                    const bcRecords = bcLoyaltyMap.get(item._uniqueKey) || [];
-                    if (bcRecords.length > 0) {
-                        // Lấy earliest
-                        const earliest = bcRecords[0];
-                        const matchingItem = updateDataArray.find(u => 
-                            u._uniqueKey === item._uniqueKey && 
-                            normalizeValue(u["TDV"]) === earliest.tdv &&
-                            u._ngayDate && earliest.ngayDate &&
-                            u._ngayDate.getTime() === earliest.ngayDate.getTime()
-                        );
-                        if (matchingItem) {
-                            dataMap.set(item._uniqueKey, matchingItem);
-                        } else {
-                            dataMap.set(item._uniqueKey, item);
-                        }
-                    }
+                    dataMap.set(item._uniqueKey, item);
                 } else if (existing._source === 'bc_loyalty') {
-                    const existingTdv = normalizeValue(existing["TDV"]);
-                    const itemTdv = normalizeValue(item["TDV"]);
-                    
-                    if (existingTdv === itemTdv) {
-                        if (item._ngayDate && existing._ngayDate && item._ngayDate > existing._ngayDate) {
+                    // Cả hai đều từ bc_loyalty, lấy bản đăng ký sớm hơn
+                    if (item._ngayDate && existing._ngayDate) {
+                        if (item._ngayDate < existing._ngayDate) {
                             dataMap.set(item._uniqueKey, item);
                         }
-                    } else {
-                        if (item._ngayDate && existing._ngayDate && item._ngayDate < existing._ngayDate) {
-                            dataMap.set(item._uniqueKey, item);
-                        }
+                    } else if (item._ngayDate && !existing._ngayDate) {
+                        dataMap.set(item._uniqueKey, item);
                     }
                 }
             }
         });
         
-        // Add new data (highest priority)
+        // Thêm new data cuối cùng (ưu tiên cao nhất)
         newDataArray.forEach(item => {
             if (item._uniqueKey) {
                 dataMap.set(item._uniqueKey, item);
@@ -892,7 +760,7 @@ async function loadData() {
         
         uniqueData = Array.from(dataMap.values());
         
-        // Extract provinces
+        // Extract all unique provinces
         uniqueData.forEach(item => {
             const tinh = normalizeValue(item["Tỉnh"]);
             if (tinh) {
@@ -902,14 +770,17 @@ async function loadData() {
         
         populateProvinceFilter();
         
-        console.log("Unique data:", uniqueData.length);
+        const totalRaw = newDataArray.length + oldDataArray.length + updateDataArray.length;
+        console.log("Total raw data:", totalRaw);
+        console.log("Unique data after deduplication:", uniqueData.length);
+        console.log("Duplicates removed:", totalRaw - uniqueData.length);
 
         isLoading = false;
-        showMessage(`✅ Đã tải ${uniqueData.length} khách hàng. Hãy nhập từ khóa để tìm kiếm.`);
+        showMessage(`✅ Đã tải ${uniqueData.length} khách hàng duy nhất (từ ${newDataArray.length} new + ${updateDataArray.length} bc_loyalty + ${oldDataArray.length} old). Hãy nhập từ khóa để tìm kiếm.`);
         
     } catch (error) {
         isLoading = false;
-        showMessage("❌ Lỗi khi tải dữ liệu.");
+        showMessage("❌ Lỗi khi tải dữ liệu. Vui lòng thử lại sau.");
         console.error("Load error:", error);
     }
 }
@@ -934,7 +805,9 @@ function render(keyword = "") {
     const tbody = document.getElementById("tbody");
     const statsDiv = document.getElementById("stats");
     
-    if (isLoading) return;
+    if (isLoading) {
+        return;
+    }
 
     if (!keyword.trim()) {
         tbody.innerHTML = '<tr><td colspan="9" class="no-results">👆 Nhập từ khóa để bắt đầu tìm kiếm</td></tr>';
@@ -960,7 +833,10 @@ function render(keyword = "") {
         const statusInfo = determineCustomerStatus(data);
         const tinh = normalizeValue(data["Tỉnh"]);
         
+        // Apply status filter
         if (currentFilter !== 'all' && statusInfo.status !== currentFilter) continue;
+        
+        // Apply province filter
         if (currentProvince !== 'all' && tinh !== currentProvince) continue;
 
         const tr = document.createElement("tr");
@@ -972,10 +848,10 @@ function render(keyword = "") {
         const sdt = normalizeValue(data["Số điện thoại di động"]);
         const khachHang = normalizeValue(data["KH"]);
         const tdvName = normalizeValue(data["TDV"]);
-        const imageUrl = statusInfo.imageUrl || "";
+        const imageUrl = data._imageUrl || "";
         
         const statusCellClass = imageUrl ? 'clickable-status' : '';
-        const statusCellOnClick = imageUrl ? `onclick="openImageModal('${imageUrl.replace(/'/g, "\\'")}', '${khachHang.replace(/'/g, "\\'")}')"` : '';
+        const statusCellOnClick = imageUrl ? `onclick="openImageModal('${imageUrl}', '${khachHang}')"` : '';
 
         tr.innerHTML = `
             <td>${maKH}</td>
@@ -996,22 +872,23 @@ function render(keyword = "") {
     }
 
     if (count === 0) {
-        tbody.innerHTML = '<tr><td colspan="9" class="no-results">🔍 Không tìm thấy kết quả</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" class="no-results">🔍 Không tìm thấy kết quả phù hợp</td></tr>';
         statsDiv.style.display = "none";
     } else {
         tbody.innerHTML = "";
         tbody.appendChild(fragment);
         
-        const filterText = currentFilter === 'all' ? '' : ` (Lọc)`;
-        const provinceText = currentProvince !== 'all' ? ` - ${currentProvince}` : '';
+        const filterText = currentFilter === 'all' ? '' : ` (Lọc: ${document.querySelector(`#status-${currentFilter.split('-')[0]}`).nextElementSibling.textContent})`;
+        const provinceText = currentProvince !== 'all' ? ` - Tỉnh: ${currentProvince}` : '';
         
         statsDiv.innerHTML = `
-            📊 <strong>${count}</strong> kết quả${filterText}${provinceText}<br>
-            ✅ Đã duyệt: <strong>${stats['approved-2026']}</strong> | 
-            ⏳ Chưa duyệt: <strong>${stats['pending-2026']}</strong> | 
-            ❌ Lỗi: <strong>${stats['error-2026']}</strong> | 
-            🆕 Mới 2025: <strong>${stats['new-2025-only']}</strong> | 
-            ⚠️ Chưa ký 2026: <strong>${stats['old-2025-no-2026']}</strong>
+            📊 Tìm thấy <strong>${count}</strong> kết quả${filterText}${provinceText}<br>
+            ✅ Đã ký 2026 & Duyệt: <strong>${stats['approved-2026']}</strong> | 
+            ⏳ Đã ký 2026 chưa duyệt: <strong>${stats['pending-2026']}</strong> | 
+            ❌ Đã ký 2026 bị lỗi: <strong>${stats['error-2026']}</strong><br>
+            🆕 Mới ký 2025: <strong>${stats['new-2025-only']}</strong> | 
+            ⚠️ Đã ký 2025 chưa ký 2026: <strong>${stats['old-2025-no-2026']}</strong>
+            ${count >= MAX_RENDER ? ` (Hiển thị tối đa ${MAX_RENDER} kết quả)` : ''}
         `;
         statsDiv.style.display = "block";
     }
@@ -1023,34 +900,44 @@ function showMessage(msg) {
     tbody.innerHTML = `<tr><td colspan="9" class="loading">${msg}</td></tr>`;
 }
 
-/* ===== EVENT LISTENERS ===== */
+/* ===== SEARCH WITH DEBOUNCE ===== */
 document.getElementById("searchInput").addEventListener("input", e => {
     clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(() => render(e.target.value), 250);
+    const value = e.target.value;
+    debounceTimer = setTimeout(() => render(value), 250);
 });
 
+/* ===== STATUS FILTER ===== */
 document.querySelectorAll('input[name="statusFilter"]').forEach(radio => {
     radio.addEventListener('change', e => {
         currentFilter = e.target.value;
-        render(document.getElementById("searchInput").value);
+        const keyword = document.getElementById("searchInput").value;
+        render(keyword);
     });
 });
 
+/* ===== PROVINCE FILTER ===== */
 document.getElementById("provinceFilter").addEventListener('change', e => {
     currentProvince = e.target.value;
-    render(document.getElementById("searchInput").value);
+    const keyword = document.getElementById("searchInput").value;
+    render(keyword);
 });
 
+/* ===== CLEAR ALL FILTERS ===== */
 document.getElementById("clearFilters").addEventListener('click', () => {
     document.getElementById("status-all").checked = true;
     currentFilter = 'all';
+    
     document.getElementById("provinceFilter").value = 'all';
     currentProvince = 'all';
+    
     document.getElementById("searchInput").value = '';
+    
     render('');
 });
 
 document.getElementById("searchInput").focus();
+
 loadData();
 </script>
 
