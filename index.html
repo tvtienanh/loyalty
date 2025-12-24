@@ -629,13 +629,29 @@ function formatUpdateTime(date) {
 function extractImageUrl(htmlString) {
     if (!htmlString) return "";
     
-    const match = htmlString.match(/src="([^"]+)"/);
+    const str = String(htmlString).trim();
+    
+    // Case 1: HTML img tag with src
+    const match = str.match(/src=["']([^"']+)["']/);
     if (match && match[1]) {
         return match[1];
     }
     
-    if (htmlString.startsWith('http')) {
-        return htmlString;
+    // Case 2: Direct URL (starts with http)
+    if (str.startsWith('http://') || str.startsWith('https://')) {
+        return str;
+    }
+    
+    // Case 3: HTML anchor tag with href
+    const hrefMatch = str.match(/href=["']([^"']+)["']/);
+    if (hrefMatch && hrefMatch[1]) {
+        return hrefMatch[1];
+    }
+    
+    // Case 4: URL somewhere in the string
+    const urlMatch = str.match(/(https?:\/\/[^\s<>"]+)/);
+    if (urlMatch && urlMatch[1]) {
+        return urlMatch[1];
     }
     
     return "";
@@ -682,25 +698,34 @@ function determineCustomerStatus(data, allRecords) {
             const cutoffDate = new Date('2025-12-18T00:00:00');
             const uniqueKey = data._uniqueKey;
             
-            // Find all bc_loyalty records for this customer with FM2601 after cutoff
-            let hasReupload = false;
-            let reuploadRecord = null;
+            // Find all bc_loyalty records for this customer with FM2601
+            let errorRecord = null; // Record before cutoff (error image)
+            let reuploadRecord = null; // Record after cutoff (new image)
+            
             if (allRecords && allRecords.length > 0) {
                 for (const record of allRecords) {
                     if (record._uniqueKey === uniqueKey && 
                         record._source === 'bc_loyalty' && 
                         record._formType === 'FM2601' &&
-                        record._ngayDate && 
-                        record._ngayDate >= cutoffDate) {
-                        hasReupload = true;
-                        if (!reuploadRecord || record._ngayDate > reuploadRecord._ngayDate) {
-                            reuploadRecord = record;
+                        record._ngayDate) {
+                        
+                        if (record._ngayDate >= cutoffDate) {
+                            // After cutoff - reupload
+                            if (!reuploadRecord || record._ngayDate > reuploadRecord._ngayDate) {
+                                reuploadRecord = record;
+                            }
+                        } else {
+                            // Before cutoff - error image
+                            if (!errorRecord || record._ngayDate > errorRecord._ngayDate) {
+                                errorRecord = record;
+                            }
                         }
                     }
                 }
             }
             
-            if (hasReupload && reuploadRecord) {
+            if (reuploadRecord) {
+                // Has reupload - show new image in main, error image in note
                 return {
                     status: "error-2026",
                     display: "❌ Đã ký 2026 bị lỗi, đã up lại",
@@ -708,16 +733,18 @@ function determineCustomerStatus(data, allRecords) {
                     status2026: "Đã ký 2026 - BỊ LỖI (Đã up lại)",
                     note: [noteHinhAnh, thongTinSai].filter(n => n).join(" | "),
                     imageUrl: reuploadRecord._imageUrl || "",
-                    errorImageUrl: data._imageUrl || ""
+                    errorImageUrl: errorRecord ? errorRecord._imageUrl : ""
                 };
             } else {
+                // No reupload - show error image from bc_loyalty (before cutoff)
                 return {
                     status: "error-2026",
                     display: "❌ Đã ký 2026 bị lỗi",
                     status2025: "Đã ký 2025",
                     status2026: "Đã ký 2026 - BỊ LỖI",
                     note: [noteHinhAnh, thongTinSai].filter(n => n).join(" | "),
-                    imageUrl: data._imageUrl || ""
+                    imageUrl: errorRecord ? errorRecord._imageUrl : (data._imageUrl || ""),
+                    hasImage: Boolean(errorRecord ? errorRecord._imageUrl : data._imageUrl)
                 };
             }
         }
@@ -818,13 +845,18 @@ async function loadData(useCache = true) {
             const kh = normalizeValue(obj["KH"]);
             const tdv = normalizeValue(obj["TDV"]);
             
+            // Extract image URL from column N (index 13) or other columns
             const imageUrlRaw = normalizeValue(
                 obj["Link ảnh"] ||
                 obj["Hình ảnh"] ||
+                obj["Link Hình ảnh"] ||
                 obj[newJson.table.cols[13]?.label] ||
+                obj[newJson.table.cols[12]?.label] ||
                 ""
             );
             const imageUrl = extractImageUrl(imageUrlRaw);
+            
+            console.log("New data image URL:", kh, imageUrl); // Debug log
             
             obj._search = [maKH, kh, sdt, tdv].join(" ").toLowerCase();
             obj._source = "new";
@@ -876,10 +908,14 @@ async function loadData(useCache = true) {
             const imageUrlRaw = normalizeValue(
                 obj["Link ảnh"] ||
                 obj["Hình ảnh"] ||
+                obj["Link Hình ảnh"] ||
                 obj[updateJson.table.cols[13]?.label] ||
+                obj[updateJson.table.cols[12]?.label] ||
                 ""
             );
             const imageUrl = extractImageUrl(imageUrlRaw);
+            
+            console.log("BC Loyalty image URL:", kh, imageUrl); // Debug log
             
             let formType = "";
             if (colA.includes("FM2601")) {
@@ -1176,6 +1212,8 @@ function render(keyword = "") {
         const khachHang = normalizeValue(data["KH"]);
         const tdvName = normalizeValue(data["TDV"]);
         const imageUrl = statusInfo.imageUrl;
+        
+        console.log("Rendering row:", khachHang, "Status:", statusInfo.status, "Image URL:", imageUrl); // Debug log
         
         let noteHTML = statusInfo.note;
         
