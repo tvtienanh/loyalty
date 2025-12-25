@@ -317,6 +317,14 @@
         font-size: 20px;
     }
     
+    .modal-subtitle {
+        margin: 5px 0 0 0;
+        color: #666;
+        font-size: 13px;
+        font-style: italic;
+        font-weight: normal;
+    }
+    
     .close-btn {
         background: #f44336;
         color: white;
@@ -491,7 +499,10 @@
 <div id="imageModal" class="modal">
     <div class="modal-content">
         <div class="modal-header">
-            <h3>🖼️ Hình ảnh khách hàng</h3>
+            <div>
+                <h3 id="modalTitle">🖼️ Hình ảnh đăng ký</h3>
+                <p class="modal-subtitle" id="modalSubtitle"></p>
+            </div>
             <button class="close-btn" onclick="closeImageModal()">✕ Đóng</button>
         </div>
         <div class="modal-body" id="modalBody">
@@ -514,14 +525,39 @@ let currentFilter = 'all';
 let currentProvince = 'all';
 let allProvinces = new Set();
 
-function openImageModal(imageUrl, customerName) {
+function openImageModal(imageUrl, customerName, imageDate, previousDate) {
     const modal = document.getElementById("imageModal");
     const modalBody = document.getElementById("modalBody");
+    const modalTitle = document.getElementById("modalTitle");
+    const modalSubtitle = document.getElementById("modalSubtitle");
     
     if (!imageUrl) {
+        modalTitle.textContent = "🖼️ Hình ảnh đăng ký";
+        modalSubtitle.textContent = "";
         modalBody.innerHTML = '<div class="image-error">❌ Không có hình ảnh</div>';
         modal.style.display = "block";
         return;
+    }
+    
+    // Determine the form type and display title
+    let formYear = "2026";
+    if (imageUrl.includes("FM2501") || (imageDate && new Date(imageDate) < new Date('2025-12-18'))) {
+        formYear = "2025";
+    }
+    
+    // Format the main date
+    let mainDateText = "";
+    if (imageDate) {
+        mainDateText = ` Lúc ${formatUpdateTime(new Date(imageDate))}`;
+    }
+    
+    modalTitle.textContent = `🖼️ Hình ảnh đăng ký Loyalty ${formYear}${mainDateText}`;
+    
+    // Format the previous date if exists
+    if (previousDate) {
+        modalSubtitle.textContent = `(Đã ký ${formYear === '2026' ? '2025' : '2024'} vào lúc ${formatUpdateTime(new Date(previousDate))})`;
+    } else {
+        modalSubtitle.textContent = "";
     }
     
     modalBody.innerHTML = '<div class="image-loading">⏳ Đang tải hình ảnh...</div>';
@@ -733,7 +769,8 @@ function determineCustomerStatus(data, allRecords) {
                     status2026: "Đã ký 2026 - BỊ LỖI (Đã up lại)",
                     note: [noteHinhAnh, thongTinSai].filter(n => n).join(" | "),
                     imageUrl: reuploadRecord._imageUrl || "",
-                    errorImageUrl: errorRecord ? errorRecord._imageUrl : ""
+                    errorImageUrl: errorRecord ? errorRecord._imageUrl : "",
+                    errorImageDate: errorRecord ? errorRecord._ngayDate : null
                 };
             } else {
                 // No reupload - show error image from bc_loyalty (before cutoff)
@@ -1212,6 +1249,8 @@ function render(keyword = "") {
         const khachHang = normalizeValue(data["KH"]);
         const tdvName = normalizeValue(data["TDV"]);
         const imageUrl = statusInfo.imageUrl;
+        const imageDate = data._ngayDate;
+        const previousImageDate = data._previousDate || null;
         
         console.log("Rendering row:", khachHang, "Status:", statusInfo.status, "Image URL:", imageUrl); // Debug log
         
@@ -1219,7 +1258,9 @@ function render(keyword = "") {
         
         // Add error image link if this is a re-uploaded error case
         if (statusInfo.errorImageUrl) {
-            const errorImgLink = `<span class="error-image-link" onclick="openImageModal('${statusInfo.errorImageUrl}', '${khachHang}')" title="Click để xem ảnh lỗi">🔴 Ảnh lỗi (Ký trước)</span>`;
+            const errorImgDate = statusInfo.errorImageDate || null;
+            const errorDateParam = errorImgDate ? `,'${errorImgDate}'` : ',null';
+            const errorImgLink = `<span class="error-image-link" onclick="openImageModal('${statusInfo.errorImageUrl}', '${khachHang}'${errorDateParam})" title="Click để xem ảnh lỗi">🔴 Ảnh lỗi (Ký trước)</span>`;
             if (noteHTML) {
                 noteHTML += '<br>' + errorImgLink;
             } else {
@@ -1234,8 +1275,9 @@ function render(keyword = "") {
                 const dupTdv = dup.tdv || 'Unknown';
                 const dupFormType = dup.formType || '';
                 const reason = dup.reason || 'ký lộn';
+                const dupDate = dup.date ? `,'${dup.date.toISOString()}'` : ',null';
                 if (dupUrl) {
-                    return `<span class="duplicate-warning" onclick="openImageModal('${dupUrl}', '${khachHang}')" title="Click để xem ảnh">⚠️ ${dupTdv} ${reason} (${dupFormType})</span>`;
+                    return `<span class="duplicate-warning" onclick="openImageModal('${dupUrl}', '${khachHang}'${dupDate})" title="Click để xem ảnh">⚠️ ${dupTdv} ${reason} (${dupFormType})</span>`;
                 } else {
                     return `<span class="duplicate-warning">⚠️ ${dupTdv} ${reason} (${dupFormType})</span>`;
                 }
