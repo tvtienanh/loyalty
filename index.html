@@ -531,6 +531,8 @@ function openImageModal(imageUrl, customerName, imageDate, previousDate) {
     const modalTitle = document.getElementById("modalTitle");
     const modalSubtitle = document.getElementById("modalSubtitle");
     
+    console.log("Modal params:", {imageUrl, imageDate, previousDate}); // Debug
+    
     if (!imageUrl) {
         modalTitle.textContent = "🖼️ Hình ảnh đăng ký";
         modalSubtitle.textContent = "";
@@ -539,23 +541,37 @@ function openImageModal(imageUrl, customerName, imageDate, previousDate) {
         return;
     }
     
-    // Determine the form type and display title
+    // Parse dates if they are ISO strings
+    let parsedImageDate = null;
+    let parsedPreviousDate = null;
+    
+    if (imageDate && imageDate !== 'null' && imageDate !== 'undefined') {
+        parsedImageDate = new Date(imageDate);
+        console.log("Parsed image date:", parsedImageDate);
+    }
+    if (previousDate && previousDate !== 'null' && previousDate !== 'undefined') {
+        parsedPreviousDate = new Date(previousDate);
+        console.log("Parsed previous date:", parsedPreviousDate);
+    }
+    
+    // Determine the form type
     let formYear = "2026";
-    if (imageUrl.includes("FM2501") || (imageDate && new Date(imageDate) < new Date('2025-12-18'))) {
+    if (parsedImageDate && parsedImageDate < new Date('2025-12-18')) {
         formYear = "2025";
     }
     
     // Format the main date
     let mainDateText = "";
-    if (imageDate) {
-        mainDateText = ` Lúc ${formatUpdateTime(new Date(imageDate))}`;
+    if (parsedImageDate && !isNaN(parsedImageDate.getTime())) {
+        mainDateText = ` Lúc ${formatUpdateTime(parsedImageDate)}`;
     }
     
-    modalTitle.textContent = `🖼️ Hình ảnh đăng ký Loyalty ${formYear}${mainDateText}`;
+    modalTitle.textContent = `🖼️ Hình ảnh đăng ký${mainDateText}`;
     
     // Format the previous date if exists
-    if (previousDate) {
-        modalSubtitle.textContent = `(Đã ký ${formYear === '2026' ? '2025' : '2024'} vào lúc ${formatUpdateTime(new Date(previousDate))})`;
+    if (parsedPreviousDate && !isNaN(parsedPreviousDate.getTime())) {
+        const prevYear = formYear === '2026' ? '2025' : '2024';
+        modalSubtitle.textContent = `(Đã ký ${prevYear} vào lúc ${formatUpdateTime(parsedPreviousDate)})`;
     } else {
         modalSubtitle.textContent = "";
     }
@@ -1132,7 +1148,7 @@ async function loadData(useCache = true) {
                 });
             }
             
-            // Filter duplicates for warnings
+            // Filter only duplicates for warning display
             const duplicates = finalHistory.filter(item => item.isDuplicate);
             
             if (duplicates.length > 0) {
@@ -1142,6 +1158,15 @@ async function loadData(useCache = true) {
             // Store full history
             if (finalHistory.length > 0) {
                 mainRecord._uploadHistory = finalHistory;
+            }
+            
+            // Store the date of the previous form (for modal subtitle)
+            if (mainRecord._formType === 'FM2601') {
+                // Look for FM2501 date
+                const fm2501Record = records.find(r => r._formType === 'FM2501' && r._ngayDate);
+                if (fm2501Record) {
+                    mainRecord._previousDate = fm2501Record._ngayDate;
+                }
             }
             
             dataMap.set(uniqueKey, mainRecord);
@@ -1259,7 +1284,7 @@ function render(keyword = "") {
         // Add error image link if this is a re-uploaded error case
         if (statusInfo.errorImageUrl) {
             const errorImgDate = statusInfo.errorImageDate || null;
-            const errorDateParam = errorImgDate ? `,'${errorImgDate}'` : ',null';
+            const errorDateParam = errorImgDate ? `,${errorImgDate ? `'${errorImgDate.toISOString()}'` : 'null'}` : ',null';
             const errorImgLink = `<span class="error-image-link" onclick="openImageModal('${statusInfo.errorImageUrl}', '${khachHang}'${errorDateParam})" title="Click để xem ảnh lỗi">🔴 Ảnh lỗi (Ký trước)</span>`;
             if (noteHTML) {
                 noteHTML += '<br>' + errorImgLink;
@@ -1275,7 +1300,7 @@ function render(keyword = "") {
                 const dupTdv = dup.tdv || 'Unknown';
                 const dupFormType = dup.formType || '';
                 const reason = dup.reason || 'ký lộn';
-                const dupDate = dup.date ? `,'${dup.date.toISOString()}'` : ',null';
+                const dupDate = dup.date ? `,${dup.date ? `'${dup.date.toISOString()}'` : 'null'}` : ',null';
                 if (dupUrl) {
                     return `<span class="duplicate-warning" onclick="openImageModal('${dupUrl}', '${khachHang}'${dupDate})" title="Click để xem ảnh">⚠️ ${dupTdv} ${reason} (${dupFormType})</span>`;
                 } else {
