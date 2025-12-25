@@ -785,11 +785,13 @@ function determineCustomerStatus(data, allRecords) {
                     status2026: "Đã ký 2026 - BỊ LỖI (Đã up lại)",
                     note: [noteHinhAnh, thongTinSai].filter(n => n).join(" | "),
                     imageUrl: reuploadRecord._imageUrl || "",
+                    imageDate: reuploadRecord._ngayDate,
                     errorImageUrl: errorRecord ? errorRecord._imageUrl : "",
                     errorImageDate: errorRecord ? errorRecord._ngayDate : null
                 };
             } else {
                 // No reupload - show error image from bc_loyalty (before cutoff)
+                const errorImageDate = errorRecord ? errorRecord._ngayDate : bcLoyaltyDate;
                 return {
                     status: "error-2026",
                     display: "❌ Đã ký 2026 bị lỗi",
@@ -797,6 +799,7 @@ function determineCustomerStatus(data, allRecords) {
                     status2026: "Đã ký 2026 - BỊ LỖI",
                     note: [noteHinhAnh, thongTinSai].filter(n => n).join(" | "),
                     imageUrl: errorRecord ? errorRecord._imageUrl : (data._imageUrl || ""),
+                    imageDate: errorImageDate,
                     hasImage: Boolean(errorRecord ? errorRecord._imageUrl : data._imageUrl)
                 };
             }
@@ -811,7 +814,8 @@ function determineCustomerStatus(data, allRecords) {
                 status2025: "Đã ký 2025",
                 status2026: "Đã ký 2026 - CHƯA DUYỆT",
                 note: "",
-                imageUrl: data._imageUrl || ""
+                imageUrl: data._imageUrl || "",
+                imageDate: data._ngayDate || null
             };
         } else if (formType.includes("FM2501_Upload Thoa thuan CT Vung tin gang ket 2025")) {
             if (data._ngayDate && isWithin7Days(data._ngayDate)) {
@@ -821,7 +825,8 @@ function determineCustomerStatus(data, allRecords) {
                     status2025: "Mới ký 2025",
                     status2026: "Chưa ký 2026",
                     note: "",
-                    imageUrl: data._imageUrl || ""
+                    imageUrl: data._imageUrl || "",
+                    imageDate: data._ngayDate || null
                 };
             } else {
                 return {
@@ -830,7 +835,8 @@ function determineCustomerStatus(data, allRecords) {
                     status2025: "Đã ký 2025",
                     status2026: "Chưa ký 2026",
                     note: "",
-                    imageUrl: data._imageUrl || ""
+                    imageUrl: data._imageUrl || "",
+                    imageDate: data._ngayDate || null
                 };
             }
         } else {
@@ -840,7 +846,8 @@ function determineCustomerStatus(data, allRecords) {
                 status2025: "Đã ký 2025",
                 status2026: "Đã ký 2026 - CHƯA DUYỆT",
                 note: "",
-                imageUrl: data._imageUrl || ""
+                imageUrl: data._imageUrl || "",
+                imageDate: data._ngayDate || null
             };
         }
     } else if (source === 'original') {
@@ -850,7 +857,8 @@ function determineCustomerStatus(data, allRecords) {
             status2025: "Đã ký 2025",
             status2026: "Chưa ký 2026",
             note: "",
-            imageUrl: ""
+            imageUrl: "",
+            imageDate: null
         };
     }
     
@@ -860,7 +868,8 @@ function determineCustomerStatus(data, allRecords) {
         status2025: "",
         status2026: "",
         note: "",
-        imageUrl: ""
+        imageUrl: "",
+        imageDate: null
     };
 }
 
@@ -1284,8 +1293,8 @@ function render(keyword = "") {
         // Add error image link if this is a re-uploaded error case
         if (statusInfo.errorImageUrl) {
             const errorImgDate = statusInfo.errorImageDate || null;
-            const errorDateParam = errorImgDate ? `,${errorImgDate ? `'${errorImgDate.toISOString()}'` : 'null'}` : ',null';
-            const errorImgLink = `<span class="error-image-link" onclick="openImageModal('${statusInfo.errorImageUrl}', '${khachHang}'${errorDateParam})" title="Click để xem ảnh lỗi">🔴 Ảnh lỗi (Ký trước)</span>`;
+            const errorDateStr = errorImgDate ? `'${errorImgDate.toISOString()}'` : 'null';
+            const errorImgLink = `<span class="error-image-link" onclick="openImageModal('${statusInfo.errorImageUrl}', '${khachHang}', ${errorDateStr}, null)" title="Click để xem ảnh lỗi">🔴 Ảnh lỗi (Ký trước)</span>`;
             if (noteHTML) {
                 noteHTML += '<br>' + errorImgLink;
             } else {
@@ -1300,9 +1309,9 @@ function render(keyword = "") {
                 const dupTdv = dup.tdv || 'Unknown';
                 const dupFormType = dup.formType || '';
                 const reason = dup.reason || 'ký lộn';
-                const dupDate = dup.date ? `,${dup.date ? `'${dup.date.toISOString()}'` : 'null'}` : ',null';
+                const dupDateStr = dup.date ? `'${dup.date.toISOString()}'` : 'null';
                 if (dupUrl) {
-                    return `<span class="duplicate-warning" onclick="openImageModal('${dupUrl}', '${khachHang}'${dupDate})" title="Click để xem ảnh">⚠️ ${dupTdv} ${reason} (${dupFormType})</span>`;
+                    return `<span class="duplicate-warning" onclick="openImageModal('${dupUrl}', '${khachHang}', ${dupDateStr}, null)" title="Click để xem ảnh">⚠️ ${dupTdv} ${reason} (${dupFormType})</span>`;
                 } else {
                     return `<span class="duplicate-warning">⚠️ ${dupTdv} ${reason} (${dupFormType})</span>`;
                 }
