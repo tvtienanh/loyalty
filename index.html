@@ -317,14 +317,6 @@
         font-size: 20px;
     }
     
-    .modal-subtitle {
-        margin: 5px 0 0 0;
-        color: #666;
-        font-size: 13px;
-        font-style: italic;
-        font-weight: normal;
-    }
-    
     .close-btn {
         background: #f44336;
         color: white;
@@ -499,10 +491,7 @@
 <div id="imageModal" class="modal">
     <div class="modal-content">
         <div class="modal-header">
-            <div>
-                <h3 id="modalTitle">🖼️ Hình ảnh đăng ký</h3>
-                <p class="modal-subtitle" id="modalSubtitle"></p>
-            </div>
+            <h3>🖼️ Hình ảnh khách hàng</h3>
             <button class="close-btn" onclick="closeImageModal()">✕ Đóng</button>
         </div>
         <div class="modal-body" id="modalBody">
@@ -525,55 +514,14 @@ let currentFilter = 'all';
 let currentProvince = 'all';
 let allProvinces = new Set();
 
-function openImageModal(imageUrl, customerName, imageDate, previousDate) {
+function openImageModal(imageUrl, customerName) {
     const modal = document.getElementById("imageModal");
     const modalBody = document.getElementById("modalBody");
-    const modalTitle = document.getElementById("modalTitle");
-    const modalSubtitle = document.getElementById("modalSubtitle");
-    
-    console.log("Modal params:", {imageUrl, imageDate, previousDate}); // Debug
     
     if (!imageUrl) {
-        modalTitle.textContent = "🖼️ Hình ảnh đăng ký";
-        modalSubtitle.textContent = "";
         modalBody.innerHTML = '<div class="image-error">❌ Không có hình ảnh</div>';
         modal.style.display = "block";
         return;
-    }
-    
-    // Parse dates if they are ISO strings
-    let parsedImageDate = null;
-    let parsedPreviousDate = null;
-    
-    if (imageDate && imageDate !== 'null' && imageDate !== 'undefined') {
-        parsedImageDate = new Date(imageDate);
-        console.log("Parsed image date:", parsedImageDate);
-    }
-    if (previousDate && previousDate !== 'null' && previousDate !== 'undefined') {
-        parsedPreviousDate = new Date(previousDate);
-        console.log("Parsed previous date:", parsedPreviousDate);
-    }
-    
-    // Determine the form type
-    let formYear = "2026";
-    if (parsedImageDate && parsedImageDate < new Date('2025-12-18')) {
-        formYear = "2025";
-    }
-    
-    // Format the main date
-    let mainDateText = "";
-    if (parsedImageDate && !isNaN(parsedImageDate.getTime())) {
-        mainDateText = ` Lúc ${formatUpdateTime(parsedImageDate)}`;
-    }
-    
-    modalTitle.textContent = `🖼️ Hình ảnh đăng ký${mainDateText}`;
-    
-    // Format the previous date if exists
-    if (parsedPreviousDate && !isNaN(parsedPreviousDate.getTime())) {
-        const prevYear = formYear === '2026' ? '2025' : '2024';
-        modalSubtitle.textContent = `(Đã ký ${prevYear} vào lúc ${formatUpdateTime(parsedPreviousDate)})`;
-    } else {
-        modalSubtitle.textContent = "";
     }
     
     modalBody.innerHTML = '<div class="image-loading">⏳ Đang tải hình ảnh...</div>';
@@ -785,14 +733,10 @@ function determineCustomerStatus(data, allRecords) {
                     status2026: "Đã ký 2026 - BỊ LỖI (Đã up lại)",
                     note: [noteHinhAnh, thongTinSai].filter(n => n).join(" | "),
                     imageUrl: reuploadRecord._imageUrl || "",
-                    imageDate: reuploadRecord._ngayDate,
-                    errorImageUrl: errorRecord ? errorRecord._imageUrl : "",
-                    errorImageDate: errorRecord ? errorRecord._ngayDate : null,
-                    previousImageDate: data._previousDate
+                    errorImageUrl: errorRecord ? errorRecord._imageUrl : ""
                 };
             } else {
                 // No reupload - show error image from bc_loyalty (before cutoff)
-                const errorImageDate = errorRecord ? errorRecord._ngayDate : bcLoyaltyDate;
                 return {
                     status: "error-2026",
                     display: "❌ Đã ký 2026 bị lỗi",
@@ -800,27 +744,12 @@ function determineCustomerStatus(data, allRecords) {
                     status2026: "Đã ký 2026 - BỊ LỖI",
                     note: [noteHinhAnh, thongTinSai].filter(n => n).join(" | "),
                     imageUrl: errorRecord ? errorRecord._imageUrl : (data._imageUrl || ""),
-                    imageDate: errorImageDate,
-                    hasImage: Boolean(errorRecord ? errorRecord._imageUrl : data._imageUrl),
-                    previousImageDate: data._previousDate
+                    hasImage: Boolean(errorRecord ? errorRecord._imageUrl : data._imageUrl)
                 };
             }
         }
     } else if (source === 'bc_loyalty') {
         const formType = normalizeValue(data["Cột A"] || data["Form"] || "");
-        
-        // Find previous form date for subtitle
-        let previousFormDate = null;
-        if (data._formType === 'FM2601' && allRecords && allRecords.length > 0) {
-            const fm2501Record = allRecords.find(r => 
-                r._uniqueKey === data._uniqueKey && 
-                r._formType === 'FM2501' &&
-                r._ngayDate
-            );
-            if (fm2501Record) {
-                previousFormDate = fm2501Record._ngayDate;
-            }
-        }
         
         if (formType.includes("FM2601_Upload Thoa thuan CT Vung tin gang ket 2026")) {
             return {
@@ -829,9 +758,7 @@ function determineCustomerStatus(data, allRecords) {
                 status2025: "Đã ký 2025",
                 status2026: "Đã ký 2026 - CHƯA DUYỆT",
                 note: "",
-                imageUrl: data._imageUrl || "",
-                imageDate: data._ngayDate,
-                previousImageDate: previousFormDate
+                imageUrl: data._imageUrl || ""
             };
         } else if (formType.includes("FM2501_Upload Thoa thuan CT Vung tin gang ket 2025")) {
             if (data._ngayDate && isWithin7Days(data._ngayDate)) {
@@ -841,8 +768,7 @@ function determineCustomerStatus(data, allRecords) {
                     status2025: "Mới ký 2025",
                     status2026: "Chưa ký 2026",
                     note: "",
-                    imageUrl: data._imageUrl || "",
-                    imageDate: data._ngayDate
+                    imageUrl: data._imageUrl || ""
                 };
             } else {
                 return {
@@ -851,8 +777,7 @@ function determineCustomerStatus(data, allRecords) {
                     status2025: "Đã ký 2025",
                     status2026: "Chưa ký 2026",
                     note: "",
-                    imageUrl: data._imageUrl || "",
-                    imageDate: data._ngayDate
+                    imageUrl: data._imageUrl || ""
                 };
             }
         } else {
@@ -862,9 +787,7 @@ function determineCustomerStatus(data, allRecords) {
                 status2025: "Đã ký 2025",
                 status2026: "Đã ký 2026 - CHƯA DUYỆT",
                 note: "",
-                imageUrl: data._imageUrl || "",
-                imageDate: data._ngayDate,
-                previousImageDate: previousFormDate
+                imageUrl: data._imageUrl || ""
             };
         }
     } else if (source === 'original') {
@@ -874,8 +797,7 @@ function determineCustomerStatus(data, allRecords) {
             status2025: "Đã ký 2025",
             status2026: "Chưa ký 2026",
             note: "",
-            imageUrl: "",
-            imageDate: null
+            imageUrl: ""
         };
     }
     
@@ -885,8 +807,7 @@ function determineCustomerStatus(data, allRecords) {
         status2025: "",
         status2026: "",
         note: "",
-        imageUrl: "",
-        imageDate: null
+        imageUrl: ""
     };
 }
 
@@ -1174,7 +1095,7 @@ async function loadData(useCache = true) {
                 });
             }
             
-            // Filter only duplicates for warning display
+            // Filter duplicates for warnings
             const duplicates = finalHistory.filter(item => item.isDuplicate);
             
             if (duplicates.length > 0) {
@@ -1186,62 +1107,14 @@ async function loadData(useCache = true) {
                 mainRecord._uploadHistory = finalHistory;
             }
             
-            // Store the date of the previous form (for modal subtitle)
-            if (mainRecord._formType === 'FM2601') {
-                // Look for FM2501 date
-                const fm2501Record = records.find(r => r._formType === 'FM2501' && r._ngayDate);
-                if (fm2501Record) {
-                    mainRecord._previousDate = fm2501Record._ngayDate;
-                    console.log("Set _previousDate for mainRecord:", mainRecord["KH"], fm2501Record._ngayDate);
-                }
-            }
-            
-            console.log("Main record selected:", mainRecord["KH"], "FormType:", mainRecord._formType, "_ngayDate:", mainRecord._ngayDate, "_previousDate:", mainRecord._previousDate);
-            
             dataMap.set(uniqueKey, mainRecord);
         });
         
-        // Process new_data and enrich with dates from bc_loyalty
-        console.log("=== Processing new_data, enriching with dates ===");
-        console.log("updateDataArray length:", updateDataArray.length);
-        
         newDataArray.forEach(item => {
             if (item._uniqueKey) {
-                // Find all bc_loyalty records for this customer
-                const bcRecords = updateDataArray.filter(r => r._uniqueKey === item._uniqueKey);
-                
-                console.log("Customer:", item["KH"], "uniqueKey:", item._uniqueKey, "bcRecords found:", bcRecords.length);
-                
-                if (bcRecords.length > 0) {
-                    // Find FM2601 record for main date
-                    const fm2601Record = bcRecords.find(r => r._formType === 'FM2601' && r._ngayDate);
-                    if (fm2601Record) {
-                        item._ngayDate = fm2601Record._ngayDate;
-                        item._imageUrl = item._imageUrl || fm2601Record._imageUrl;
-                        console.log("✅ Set _ngayDate from FM2601:", item["KH"], fm2601Record._ngayDate);
-                    } else {
-                        console.log("❌ No FM2601 with date found for:", item["KH"]);
-                    }
-                    
-                    // Find FM2501 record for previous date
-                    const fm2501Record = bcRecords.find(r => r._formType === 'FM2501' && r._ngayDate);
-                    if (fm2501Record) {
-                        item._previousDate = fm2501Record._ngayDate;
-                        console.log("✅ Set _previousDate from FM2501:", item["KH"], fm2501Record._ngayDate);
-                    } else {
-                        console.log("⚠️ No FM2501 with date found for:", item["KH"]);
-                    }
-                } else {
-                    console.log("❌ No bc_loyalty records at all for:", item["KH"]);
-                }
-                
-                console.log("Final item state:", item["KH"], "_ngayDate:", item._ngayDate, "_previousDate:", item._previousDate);
-                
                 dataMap.set(item._uniqueKey, item);
             }
         });
-        
-        console.log("=== Finished processing new_data ===");
         
         uniqueData = Array.from(dataMap.values());
         
@@ -1339,8 +1212,6 @@ function render(keyword = "") {
         const khachHang = normalizeValue(data["KH"]);
         const tdvName = normalizeValue(data["TDV"]);
         const imageUrl = statusInfo.imageUrl;
-        const imageDate = data._ngayDate;
-        const previousImageDate = data._previousDate || null;
         
         console.log("Rendering row:", khachHang, "Status:", statusInfo.status, "Image URL:", imageUrl); // Debug log
         
@@ -1348,9 +1219,7 @@ function render(keyword = "") {
         
         // Add error image link if this is a re-uploaded error case
         if (statusInfo.errorImageUrl) {
-            const errorImgDate = statusInfo.errorImageDate || null;
-            const errorDateStr = errorImgDate ? `'${errorImgDate.toISOString()}'` : 'null';
-            const errorImgLink = `<span class="error-image-link" onclick="openImageModal('${statusInfo.errorImageUrl}', '${khachHang}', ${errorDateStr}, null)" title="Click để xem ảnh lỗi">🔴 Ảnh lỗi (Ký trước)</span>`;
+            const errorImgLink = `<span class="error-image-link" onclick="openImageModal('${statusInfo.errorImageUrl}', '${khachHang}')" title="Click để xem ảnh lỗi">🔴 Ảnh lỗi (Ký trước)</span>`;
             if (noteHTML) {
                 noteHTML += '<br>' + errorImgLink;
             } else {
@@ -1365,9 +1234,8 @@ function render(keyword = "") {
                 const dupTdv = dup.tdv || 'Unknown';
                 const dupFormType = dup.formType || '';
                 const reason = dup.reason || 'ký lộn';
-                const dupDateStr = dup.date ? `'${dup.date.toISOString()}'` : 'null';
                 if (dupUrl) {
-                    return `<span class="duplicate-warning" onclick="openImageModal('${dupUrl}', '${khachHang}', ${dupDateStr}, null)" title="Click để xem ảnh">⚠️ ${dupTdv} ${reason} (${dupFormType})</span>`;
+                    return `<span class="duplicate-warning" onclick="openImageModal('${dupUrl}', '${khachHang}')" title="Click để xem ảnh">⚠️ ${dupTdv} ${reason} (${dupFormType})</span>`;
                 } else {
                     return `<span class="duplicate-warning">⚠️ ${dupTdv} ${reason} (${dupFormType})</span>`;
                 }
