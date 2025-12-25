@@ -1198,26 +1198,32 @@ async function loadData(useCache = true) {
             dataMap.set(uniqueKey, mainRecord);
         });
         
+        // Process new_data and enrich with dates from bc_loyalty
+        console.log("Processing new_data, enriching with dates from bc_loyalty");
         newDataArray.forEach(item => {
             if (item._uniqueKey) {
-                // Find corresponding bc_loyalty record to get the date
-                const bcRecord = updateDataArray.find(r => 
-                    r._uniqueKey === item._uniqueKey && 
-                    r._formType === 'FM2601' &&
-                    r._ngayDate
-                );
+                // Find all bc_loyalty records for this customer
+                const bcRecords = updateDataArray.filter(r => r._uniqueKey === item._uniqueKey);
                 
-                if (bcRecord) {
-                    item._ngayDate = bcRecord._ngayDate;
-                    // Also get previous FM2501 date if exists
-                    const fm2501Record = updateDataArray.find(r => 
-                        r._uniqueKey === item._uniqueKey && 
-                        r._formType === 'FM2501' &&
-                        r._ngayDate
-                    );
+                if (bcRecords.length > 0) {
+                    console.log("Found bc_loyalty records for:", item["KH"], "count:", bcRecords.length);
+                    
+                    // Find FM2601 record for main date
+                    const fm2601Record = bcRecords.find(r => r._formType === 'FM2601' && r._ngayDate);
+                    if (fm2601Record) {
+                        item._ngayDate = fm2601Record._ngayDate;
+                        item._imageUrl = item._imageUrl || fm2601Record._imageUrl; // Use bc_loyalty image if not in new_data
+                        console.log("Set _ngayDate for", item["KH"], ":", fm2601Record._ngayDate);
+                    }
+                    
+                    // Find FM2501 record for previous date
+                    const fm2501Record = bcRecords.find(r => r._formType === 'FM2501' && r._ngayDate);
                     if (fm2501Record) {
                         item._previousDate = fm2501Record._ngayDate;
+                        console.log("Set _previousDate for", item["KH"], ":", fm2501Record._ngayDate);
                     }
+                } else {
+                    console.log("No bc_loyalty records found for:", item["KH"]);
                 }
                 
                 dataMap.set(item._uniqueKey, item);
