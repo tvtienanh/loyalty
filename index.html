@@ -787,7 +787,8 @@ function determineCustomerStatus(data, allRecords) {
                     imageUrl: reuploadRecord._imageUrl || "",
                     imageDate: reuploadRecord._ngayDate,
                     errorImageUrl: errorRecord ? errorRecord._imageUrl : "",
-                    errorImageDate: errorRecord ? errorRecord._ngayDate : null
+                    errorImageDate: errorRecord ? errorRecord._ngayDate : null,
+                    previousImageDate: data._previousDate
                 };
             } else {
                 // No reupload - show error image from bc_loyalty (before cutoff)
@@ -800,12 +801,26 @@ function determineCustomerStatus(data, allRecords) {
                     note: [noteHinhAnh, thongTinSai].filter(n => n).join(" | "),
                     imageUrl: errorRecord ? errorRecord._imageUrl : (data._imageUrl || ""),
                     imageDate: errorImageDate,
-                    hasImage: Boolean(errorRecord ? errorRecord._imageUrl : data._imageUrl)
+                    hasImage: Boolean(errorRecord ? errorRecord._imageUrl : data._imageUrl),
+                    previousImageDate: data._previousDate
                 };
             }
         }
     } else if (source === 'bc_loyalty') {
         const formType = normalizeValue(data["Cột A"] || data["Form"] || "");
+        
+        // Find previous form date for subtitle
+        let previousFormDate = null;
+        if (data._formType === 'FM2601' && allRecords && allRecords.length > 0) {
+            const fm2501Record = allRecords.find(r => 
+                r._uniqueKey === data._uniqueKey && 
+                r._formType === 'FM2501' &&
+                r._ngayDate
+            );
+            if (fm2501Record) {
+                previousFormDate = fm2501Record._ngayDate;
+            }
+        }
         
         if (formType.includes("FM2601_Upload Thoa thuan CT Vung tin gang ket 2026")) {
             return {
@@ -815,7 +830,8 @@ function determineCustomerStatus(data, allRecords) {
                 status2026: "Đã ký 2026 - CHƯA DUYỆT",
                 note: "",
                 imageUrl: data._imageUrl || "",
-                imageDate: data._ngayDate || null
+                imageDate: data._ngayDate,
+                previousImageDate: previousFormDate
             };
         } else if (formType.includes("FM2501_Upload Thoa thuan CT Vung tin gang ket 2025")) {
             if (data._ngayDate && isWithin7Days(data._ngayDate)) {
@@ -826,7 +842,7 @@ function determineCustomerStatus(data, allRecords) {
                     status2026: "Chưa ký 2026",
                     note: "",
                     imageUrl: data._imageUrl || "",
-                    imageDate: data._ngayDate || null
+                    imageDate: data._ngayDate
                 };
             } else {
                 return {
@@ -836,7 +852,7 @@ function determineCustomerStatus(data, allRecords) {
                     status2026: "Chưa ký 2026",
                     note: "",
                     imageUrl: data._imageUrl || "",
-                    imageDate: data._ngayDate || null
+                    imageDate: data._ngayDate
                 };
             }
         } else {
@@ -847,7 +863,8 @@ function determineCustomerStatus(data, allRecords) {
                 status2026: "Đã ký 2026 - CHƯA DUYỆT",
                 note: "",
                 imageUrl: data._imageUrl || "",
-                imageDate: data._ngayDate || null
+                imageDate: data._ngayDate,
+                previousImageDate: previousFormDate
             };
         }
     } else if (source === 'original') {
@@ -1183,6 +1200,26 @@ async function loadData(useCache = true) {
         
         newDataArray.forEach(item => {
             if (item._uniqueKey) {
+                // Find corresponding bc_loyalty record to get the date
+                const bcRecord = updateDataArray.find(r => 
+                    r._uniqueKey === item._uniqueKey && 
+                    r._formType === 'FM2601' &&
+                    r._ngayDate
+                );
+                
+                if (bcRecord) {
+                    item._ngayDate = bcRecord._ngayDate;
+                    // Also get previous FM2501 date if exists
+                    const fm2501Record = updateDataArray.find(r => 
+                        r._uniqueKey === item._uniqueKey && 
+                        r._formType === 'FM2501' &&
+                        r._ngayDate
+                    );
+                    if (fm2501Record) {
+                        item._previousDate = fm2501Record._ngayDate;
+                    }
+                }
+                
                 dataMap.set(item._uniqueKey, item);
             }
         });
