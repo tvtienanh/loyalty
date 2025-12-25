@@ -1192,43 +1192,56 @@ async function loadData(useCache = true) {
                 const fm2501Record = records.find(r => r._formType === 'FM2501' && r._ngayDate);
                 if (fm2501Record) {
                     mainRecord._previousDate = fm2501Record._ngayDate;
+                    console.log("Set _previousDate for mainRecord:", mainRecord["KH"], fm2501Record._ngayDate);
                 }
             }
+            
+            console.log("Main record selected:", mainRecord["KH"], "FormType:", mainRecord._formType, "_ngayDate:", mainRecord._ngayDate, "_previousDate:", mainRecord._previousDate);
             
             dataMap.set(uniqueKey, mainRecord);
         });
         
         // Process new_data and enrich with dates from bc_loyalty
-        console.log("Processing new_data, enriching with dates from bc_loyalty");
+        console.log("=== Processing new_data, enriching with dates ===");
+        console.log("updateDataArray length:", updateDataArray.length);
+        
         newDataArray.forEach(item => {
             if (item._uniqueKey) {
                 // Find all bc_loyalty records for this customer
                 const bcRecords = updateDataArray.filter(r => r._uniqueKey === item._uniqueKey);
                 
+                console.log("Customer:", item["KH"], "uniqueKey:", item._uniqueKey, "bcRecords found:", bcRecords.length);
+                
                 if (bcRecords.length > 0) {
-                    console.log("Found bc_loyalty records for:", item["KH"], "count:", bcRecords.length);
-                    
                     // Find FM2601 record for main date
                     const fm2601Record = bcRecords.find(r => r._formType === 'FM2601' && r._ngayDate);
                     if (fm2601Record) {
                         item._ngayDate = fm2601Record._ngayDate;
-                        item._imageUrl = item._imageUrl || fm2601Record._imageUrl; // Use bc_loyalty image if not in new_data
-                        console.log("Set _ngayDate for", item["KH"], ":", fm2601Record._ngayDate);
+                        item._imageUrl = item._imageUrl || fm2601Record._imageUrl;
+                        console.log("✅ Set _ngayDate from FM2601:", item["KH"], fm2601Record._ngayDate);
+                    } else {
+                        console.log("❌ No FM2601 with date found for:", item["KH"]);
                     }
                     
                     // Find FM2501 record for previous date
                     const fm2501Record = bcRecords.find(r => r._formType === 'FM2501' && r._ngayDate);
                     if (fm2501Record) {
                         item._previousDate = fm2501Record._ngayDate;
-                        console.log("Set _previousDate for", item["KH"], ":", fm2501Record._ngayDate);
+                        console.log("✅ Set _previousDate from FM2501:", item["KH"], fm2501Record._ngayDate);
+                    } else {
+                        console.log("⚠️ No FM2501 with date found for:", item["KH"]);
                     }
                 } else {
-                    console.log("No bc_loyalty records found for:", item["KH"]);
+                    console.log("❌ No bc_loyalty records at all for:", item["KH"]);
                 }
+                
+                console.log("Final item state:", item["KH"], "_ngayDate:", item._ngayDate, "_previousDate:", item._previousDate);
                 
                 dataMap.set(item._uniqueKey, item);
             }
         });
+        
+        console.log("=== Finished processing new_data ===");
         
         uniqueData = Array.from(dataMap.values());
         
